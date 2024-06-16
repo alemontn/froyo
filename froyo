@@ -1,0 +1,651 @@
+#!/usr/bin/env bash
+
+#
+# Froyo - A language that compiles down to bash
+# Copyright (C) 2024, alemontn
+#
+# This program is free software: you can redistribute it and/or modify
+# it under the terms of the GNU General Public License as published by
+# the Free Software Foundation, either version 3 of the License, or
+# (at your option) any later version.
+#
+# This program is distributed in the hope that it will be useful,
+# but WITHOUT ANY WARRANTY; without even the implied warranty of
+# MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+# GNU General Public License for more details.
+#
+# You should have received a copy of the GNU General Public License
+# along with this program.  If not, see <https://www.gnu.org/licenses/>.
+#
+
+# exit on errors
+set -e
+
+libfy=/lib/froyo
+
+# declare flags & what they do
+flags=("werror" "comments" "noticeFroyo" "module")
+flag_descriptions=(
+  "Treat warnings as errors"
+  "Keep comments in compiled file"
+  "Add comment explaining that the script was compiled from Froyo"
+  "Compile for an external module (don't include shebang + use werror flag)"
+)
+
+# colours!
+none=$'\e[0m'
+bold=$'\e[1m'
+yellow=$'\e[1;33m'
+red=$'\e[1;31m'
+
+fatal()
+{
+  # the default exit code is 1 but can be changed if desired
+  ret=1
+  if [ ${#1} -eq 1 ] && [ -z "${1//[0-9]}" ]
+  then
+    ret=$1
+    # move to the next argument
+    shift
+  fi
+
+  if [ -n "$infile" ] && [ ! "$infile" == /dev/stdin ]
+  then
+    add_err+="$infile"
+  fi
+
+  if [ ! ${#cur} -eq 0 ]
+  then
+    add_err+="($cur):"
+  else
+    add_err+=":"
+  fi
+
+  echo $red"fatal:"$none "$add_err" "$@"
+
+  if [ ! "$out" == "/dev/stdout" ] && [ -z "$dontrm" ]
+  then
+    rm -f "$out"
+  fi
+
+  # exit on the provided code
+  exit $ret
+}
+
+warn()
+{
+  echo $yellow"warning:"$none "$@"
+
+  if flag "werror"
+  then
+    fatal "werror is set, exiting"
+  fi
+}
+
+out()
+{
+  echo "$tab""$@" >>"$out"
+}
+
+flag()
+{
+  # loop through enabled flags
+  for flag in ${eflags[@]}
+  do
+    if [ "$flag" == "$1" ]
+    then
+      return
+    else
+      continue
+    fi
+  done
+  return 1
+}
+
+flag_conflict()
+{
+  fatal "flag <'$1'> is conflicting with <'$2'> and cannot be used together"
+}
+
+ffunction()
+{
+  if [[ ! " ${functions[@]} " == *" $1 "* ]]
+  then
+    return 1
+  fi
+}
+
+internal()
+{
+  builtins=($(compgen -b))
+  if [[ ! " ${builtins[@]} " == *" $1 "* ]]
+  then
+    return 1
+  fi
+}
+
+usage()
+{
+  # get Z from x/y/Z
+  basename="${0##*'/'}"
+
+  echo "\
+Usage: $basename [ARGUMENTs] INPUT
+Compile Froyo source code to a bash script
+
+Arguments:
+ -h, --help        show this help prompt
+ -V, --version     show froyo's local version
+ -c, --stdin       use stdin for input instead of looking for input file
+ -o, --output      specify the output bash file
+ -w, --overwrite   overwrite existing file contents (be careful!)
+ -l, --list-flags  list available flags
+ -y, --eflag       enable a flag
+ -n, --dflag       disable a flag
+" &&
+    exit 0
+}
+
+version()
+{
+  echo $bold"froyo"$none "pre" "(15:01 16/06/2024 BST)"
+  exit 0
+}
+
+list_flags()
+{
+  declare -i loop=0
+  for flag in ${flags[@]}
+  do
+    echo "$flag => ${flag_descriptions[$loop]}"
+    loop+=1
+  done &&
+    exit 0
+}
+
+if [ $# -eq 0 ]
+then
+  set -- "--help"
+fi
+
+sys_args=($@)
+while [ ! $# -eq 0 ]
+do
+  case "$1" in
+    "--help"|"-h")
+      usage
+      ;;
+    "--version"|"-V")
+      version
+      ;;
+    "--output"|"-o"*)
+      if [ "${1::2}" == "-o" ] && [ -n "${1::3}" ]
+      then
+        out="${1:2}"
+      elif [ ! ${#2} -eq 0 ]
+      then
+        shift
+        out="$1"
+      fi
+
+      # - represents stdout
+      if [ "$out" == "-" ]
+      then
+        out=/dev/stdout
+      fi
+      ;;
+    "--stdin"|"-c")
+      infile=/dev/stdin
+      ;;
+    "--eflag"|"-y"*)
+      if [ "${1::2}" == "-y" ] && [ -n "${1::3}" ]
+      then
+        eflags+=("${1:2}")
+      elif [ ! ${#2} -eq 0 ]
+      then
+        shift
+        eflags+=("$1")
+      fi
+      ;;
+    "--dflag"|"-n"*)
+      if [ "${1::2}" == "-n" ] && [ -n "${1::3}" ]
+      then
+        eflags=("${eflags[@]/"${1:2}"}")
+      elif [ ! ${#2} -eq 0 ]
+      then
+        shift
+        eflags=("${eflags[@]/"$1"}")
+      fi
+      ;;
+    "--list-flags"|"-l")
+      list_flags
+      ;;
+    "--overwrite"|"-w")
+      overwrite=1
+      ;;
+    "-"*)
+      fatal "invalid argument $1 provided"
+      ;;
+    *)
+      if [ ${#infile} -eq 0 ] && [ -f "$1" ]
+      then
+        infile="$1"
+      else
+        fatal "cannot provide multiple files to compile"
+      fi
+      ;;
+  esac
+  shift
+done
+
+if flag "module"
+then
+  eflags+=("werror")
+fi
+
+if [ ${#infile} -eq 0 ]
+then
+  fatal "input file not provided"
+elif [ ! -f "$infile" ]
+then
+  fatal "input file $1 does not exist"
+fi
+
+if [ ${#out} -eq 0 ]
+then
+  warn "output file not provided"
+fi
+
+if [ ${#out} -eq 0 ] && [ ! "$infile" == "/dev/stdin" ]
+then
+  out="${infile%'.fy'}"
+   out="${out##*'/'}"
+elif [ ${#out} -eq 0 ] && [ "$infile" == "/dev/stdin" ]
+then
+  out="out"
+fi
+
+src="$(<$infile)"
+
+# PARSE
+
+# set integer for current line
+declare -i cur=0
+# declare integer
+declare -a type
+
+while read tl
+do
+  # increment current line by 1
+  prev=$cur
+  cur+=1
+
+  if [ "${type[$prev]}" == "function" ]
+  then
+    type[$cur]="codeblock"
+  fi
+
+  if [ "${type[$prev]}" == "ml_comment" ] && [ ! "${tl: -2}" == "*/" ]
+  then
+    type[$cur]="ml_comment"
+  elif [ "${tl: -2}" == "*/" ]
+  then
+    type[$cur]="end_ml_c"
+  else
+    case "$tl" in
+      # shebang
+      "#!"*)               type[$cur]="head";;
+      # single line comment
+      "//"*)               type[$cur]="sl_comment";;
+      # multi line comment
+      "/*"*)               type[$cur]="ml_comment";;
+      # declaring a value with attributes
+      *": "*" = "*)        type[$cur]="value_attr";;
+      # declaring a value
+      *" = "*)             type[$cur]="value";;
+      # a function
+      "function "*|"fn "*) type[$cur]="function";;
+      # an if statement
+      "if "*)              type[$cur]="if";;
+      # block containing code
+      "{")                 type[$cur]="codeblock";;
+      # add if to an else statement
+      *"else if"*)         type[$cur]="elseif";;
+      # else to if statement
+      *"else"*)            type[$cur]="else";;
+      "}")                 type[$cur]="endblock";;
+      # include external
+      "include "*)         type[$cur]="include";;
+      # code that will be ran
+      [a-z]*"("*")")       type[$cur]="run";;
+      # ignore the line because it is empty
+      "")                  type[$cur]="head";;
+      # all else fails
+      *) fatal             "failed to determine type of code";;
+    esac
+  fi
+  line[$cur]="$tl"
+done \
+ <<<"$src"
+
+# redeclare
+declare -i cur=0
+
+if [ ! "$infile" == "/dev/stdin" ]
+then
+  touch "$infile"
+fi
+
+if [ ! "$out" == "/dev/stdout" ]
+then
+  touch "$out"
+  if [ -n "$(<$out)" ] && [ ${#overwrite} -eq 0 ]
+  then
+    dontrm=1 fatal "file $out is not empty, use '-w' to overwrite"
+  elif [ -n "$overwrite" ] && [ $overwrite -eq 1 ]
+  then
+    : >"$out"
+  fi
+  if ! flag "module"
+  then
+    out "#!/usr/bin/env bash"
+  fi
+fi
+
+if flag "noticeFroyo"
+then
+  out "# $0 ${sys_args[@]}"
+fi
+
+_if_statement()
+{
+  if [ "${current::2}" == "((" ]
+  then
+    if_type="eval"
+    if_content="${current#((}"
+     if_content="${if_content%))}"
+  elif [ "${current::1}" == "(" ]
+  then
+    if_type="run"
+    if_content="${current#(}"
+     if_content="${if_content%)}"
+  fi
+
+  # pad if conditions
+  if_content=" $if_content "
+
+  # replace user symbols to `test` arguments
+  if_content="${if_content//' < '/' -lt '}"
+  if_content="${if_content//' > '/' -gt '}"
+  if_content="${if_content//' <= '/' -le '}"
+  if_content="${if_content//' >= '/' -ge '}"
+  # use '==' for string comparisons
+  if_content="${if_content//' = '/' -eq '}"
+  if_content="${if_content//' != '/' -ne '}"
+
+  # "de"-pad if condition
+  if_content="${if_content##' '}"
+  if_content="${if_content%%' '}"
+
+  in_if_statement=1
+  tab="  "
+}
+
+_is_string()
+{
+  [ "${val_content::1}" == '"' ] && [ "${val_content: -1}" == '"' ]
+}
+
+_is_character()
+{
+  { [ "${val_content::1}" == "'" ] && [ "${val_content: -1}" == "'" ]; } || return 1
+  val_content="${val_content#"'"}"
+   val_content="${val_content%"'"}"
+
+  if [ ${#val_content} -gt 1 ]
+  then
+    fatal "type <character> can only be 1 character long, not <${#val_content}>"
+  fi
+}
+
+_is_integer()
+{
+  [ -z "${val_content//[0-9]}" ]
+}
+
+_is_float()
+{
+  [ "${val_content//[0-9]}" == "." ] && [ ! "${val_content::1}" == "." ] && [ "${val_content: -1}" == "." ]
+}
+
+_is_boolean()
+{
+  [ "$val_content" == "true" ] || [ "$val_content" == "false" ]
+}
+
+_is_pointer()
+{
+  [ "${val_content::1}" == "$" ]
+}
+
+_is_array()
+{
+  [ "${val_content::1}" == "[" ] && [ "${val_content: -1}" == "]" ] || return 1
+  val_content="${val_content#"["}"
+   val_content="${val_content%"]"}"
+
+  val_content=("${val_content//', '/' '}")
+  val_content="(${val_content[@]})"
+}
+
+for lt in ${type[@]}
+do
+  cur+=1
+
+  fn_args=()
+  prefix=()
+  current="${line[$cur]}"
+
+  val_name=
+  val_type=
+  if_type=
+  if_name=
+  if_content=
+
+  case "$lt" in
+    # do nothing since line is empty
+    "head")
+      :
+      ;;
+    "sl_comment")
+      if flag "comments"
+      then
+        val_content="${current#"//"}"
+        out "#$val_content"
+      fi
+      ;;
+    "ml_comment")
+      if flag "comments"
+      then
+        if [ "${current: -2}" == "*/" ]
+        then
+          val_content="${current%'*/'}"
+        elif [ "${current::2}" == "/*" ]
+        then
+          val_content="${current#'/*'}"
+        elif [ "${current::1}" == "*" ]
+        then
+          val_content="${current#'*'}"
+        else
+          val_content="$current"
+        fi
+        if [ ! ${#val_content} -eq 0 ]
+        then
+          out "#$val_content"
+        fi
+      fi
+      ;;
+    "include")
+      include="${current#"include "}"
+
+      if [ -f "$libfy"/ext/"$include".sh ]
+      then
+        out "# module included @ $libfy/ext/$include.sh"
+        out "$(<"$libfy"/ext/"$include".sh)"
+        functions+=("$include")
+      else
+        fatal "missing external module <'$include'> from $libfy/ext"
+      fi
+      ;;
+    "function")
+      current="${current#*' '}"
+      fn_name="${current%'('*}"
+      fn_args="${current#*'('}"
+       fn_args="${fn_args%')'}"
+
+      fn_args=("${fn_args//', '/' '}")
+
+      functions+=("$fn_name")
+      out "$fn_name()"
+      out "{"
+      tab="  "
+
+      declare -i argh=1
+      for fn_arg in ${fn_args[@]}
+      do
+        out "$fn_arg="'$'"$argh"
+        argh+=1
+      done
+      ;;
+    "codeblock")
+      if [ ! "${current::1}" == "{" ]
+      then
+        echo current="$current" >&2
+        out "$current"
+      fi
+      ;;
+    "endblock")
+      tab="${tab:2}" out "}"
+      if [ -n "$in_if_statement" ] && [ $in_if_statement -eq 1 ]
+      then
+        in_if_statement=0
+        out "fi"
+      fi
+      ;;
+    "if")
+      current="${current#*"if "}"
+      _if_statement
+
+      case "$if_type" in
+        "eval")
+          tab="${tab:2}" out "if [[ $if_content ]]"
+          ;;
+        "run")
+          tab="${tab:2}" out "if { $if_content ;}"
+          ;;
+      esac
+      tab="${tab:2}" out "then {"
+      ;;
+    "elseif")
+      current="${current#*"else if "}"
+      _if_statement
+
+      tab="${tab:2}" out "}"
+      case "$if_type" in
+        "eval")
+          tab="${tab:2}" out "elif [[ $if_content ]]"
+          ;;
+        "run")
+          tab="${tab:2}" out "elif { $if_content ;}"
+          ;;
+      esac
+      tab="${tab:2}" out "then {"
+      ;;
+    "else")
+      tab="${tab:2}" out "}"
+      tab="${tab:2}" out "else {"
+      in_if_statement=1
+      ;;
+    "value")
+      val_name="${current% *= *}"
+      val_content="${current#* = }"
+
+      for type in string character integer float boolean pointer array
+      do
+        if _is_"$type"
+        then
+          val_type="$type"
+          break
+        else
+          continue
+        fi
+      done
+
+      if [ -z "$val_type" ]
+      then
+        fatal "$val_name is of type character, which can only have a length of 1 character" \
+              $'\n'"are you looking for a string instead?"
+      fi
+
+      out "$val_name=$val_content"
+      ;;
+    "value_attr")
+      val_name="${current%%' '*}"
+       val_name="${val_name%':'}"
+      val_attrs="${current#"$val_name: "}"
+        val_attrs="${val_attrs% *= *}"
+        val_attrs=("${val_attrs//','}")
+      val_content="${current#"$val_name: ""${val_attrs[@]//' '/', '}" *= }"
+
+      for attr in ${val_attrs[@]}
+      do
+        case "$attr" in
+          "string"|"str") val_type="string";;
+          "character"|"char") val_type="character";;
+          "integer"|"int") val_type="integer";;
+          "float") val_type="float";;
+          "boolean"|"bool") val_type="boolean";;
+          "array") val_type="array";;
+          "readonly"|"ro") val_ro=1;;
+          "local") val_local=1;;
+          *) fatal "unknown attribute <'$attr'> provided for value <'$val_name'>";;
+        esac
+      done
+
+      if ! _is_"$val_type"
+      then
+        fatal "incorrect type <$val_type> specified for <$val_name>"
+      fi
+
+      if [ -n "$val_local" ] && [ $val_local -eq 1 ]
+      then
+        prefix+=(-I)
+      fi
+
+      if [ -n "$val_ro" ] && [ $val_ro -eq 1 ]
+      then
+        prefix+=(-r)
+      fi
+
+      out "declare" "${prefix[@]}" "$val_name=$val_content"
+      ;;
+    "run")
+      run_name="${current%%'('*}"
+      run_content="${current#"$run_name"}"
+        run_content="${run_content#'('}"
+        run_content="${run_content%')'}"
+
+      if ! { ffunction "$run_name" || internal "$run_name" ;}
+      then
+        fatal "there is no shell builtin to satisfy or external script to satisfy <$run_name>"
+      fi
+
+      out "$run_name" "$run_content"
+      ;;
+  esac
+done
+
+if [ ! "$out" == "/dev/stdout" ]
+then
+  chmod +x "$out"
+fi
