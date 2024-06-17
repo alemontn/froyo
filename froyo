@@ -332,6 +332,8 @@ do
       *"else if"*)          type[$cur]="elseif";;
       # else to if statement
       *"else"*)             type[$cur]="else";;
+      # for each in <...>
+      "foreach("*", "*")")  type[$cur]="foreach";;
       # end codeblock
       "}")                  type[$cur]="endblock";;
       # include external
@@ -340,6 +342,8 @@ do
       *": "*" = "*)         type[$cur]="value_attr";;
       # declaring a value
       *" = "*)              type[$cur]="value";;
+      # appending to a value
+      *" += "*|*" ++")      type[$cur]="append";;
       # code that will be ran
       [a-z]*"("*")")        type[$cur]="run";;
       # ignore the line because it is empty
@@ -471,6 +475,9 @@ _run_digest()
    run_content="${run_content%')'}"
 }
 
+declare -A values
+declare -a functions
+
 for lt in ${type[@]}
 do
   cur+=1
@@ -526,6 +533,10 @@ do
         out "# module included @ $libfy/ext/$include.sh"
         out "$(<"$libfy"/ext/"$include".sh)"
         functions+=("$include")
+      elif [ -f "$include" ]
+      then
+        out "# file included @ $include"
+        out "$(<$include)"
       else
         fatal "missing external module <'$include'> from $libfy/ext"
       fi
@@ -546,7 +557,13 @@ do
       declare -i argh=1
       for fn_arg in ${fn_args[@]}
       do
-        out "$fn_arg="'$'"$argh"
+        if [ ${fn_arg::1} == '"' ]
+        then
+          fn_arg="$(eval echo $fn_arg)"
+          out "$fn_arg="'"''$'"$argh"'"'
+        else
+          out "$fn_arg="'$'"$argh"
+        fi
         argh+=1
       done
       ;;
@@ -562,6 +579,11 @@ do
       then
         in_if_statement=0
         out "fi"
+      fi
+      if [ -n "$in_loop" ] && [ $in_loop -eq 1 ]
+      then
+        in_loop=0
+        out "done"
       fi
       ;;
     "suffixif")
@@ -615,6 +637,18 @@ do
       out -n "else {"
       in_if_statement=1
       ;;
+    "foreach")
+      val_name="${current#"foreach("}"
+        val_name="${val_name%','*}"
+      val_loop="${current#*'('}"
+       val_loop="${val_loop%')'*}"
+       val_loop="${val_loop#*', '}"
+
+      out "for $val_name in $val_loop"
+      out "do {"
+      in_loop=1
+      tab+="  "
+      ;;
     "value")
       val_name="${current% *= *}"
       val_content="${current#* = }"
@@ -636,6 +670,7 @@ do
               $'\n'"are you looking for a string instead?"
       fi
 
+      values["$val_type"]+="$val_name "
       out "$val_name=$val_content"
       ;;
     "value_attr")
@@ -687,7 +722,25 @@ do
         out "local" "$val_name"
       fi
 
+      values["$val_type"]+="$val_name "
       out "declare" "${prefix[@]}" "$val_name=$val_content"
+      ;;
+    "append")
+      if [ "${current#*' '}" == "++" ]
+      then
+        val_name="${current%" ++"}"
+        out "$val_name+=1"
+      else
+        val_name="${current%%' += '*}"
+        val_add="${current#*' += '}"
+  
+        if [[ " ${values["string"]} " == *" $val_name "* ]]
+        then
+          out "$val_name+="'"'"$val_add"'"'
+        else
+          out "$val_name+=$val_add"
+        fi
+      fi
       ;;
     "run")
       _run_digest

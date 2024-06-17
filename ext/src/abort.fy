@@ -1,10 +1,16 @@
+none = $'\e[0m'
+red = $'\e[1;31m'
+yellow = $'\e[1;33m'
+
 fn abort(ret, message)
 {
-  red: local, ro = $'\e[1;31m'
-  none: local, ro = $'\e[0m'
-
   // print provided message
   echo($red"error:"$none "$message")
   // exit on code
   return($ret)
+}
+
+fn warn(message)
+{
+  echo($yellow"warning:"$none "$message")
 }
