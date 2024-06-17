@@ -1,5 +1,7 @@
 # Froyo
 
+![Build](https://github.com/alemontn/froyo/actions/workflows/make-deb.yml/badge.svg)
+
 ## WARNING
 
 THIS LANGUAGE IS A WIP, VERY BASIC FEATURES
