@@ -21,6 +21,7 @@
 # exit on errors
 set -e
 
+# find /lib/froyo based on froyo's executable location
 if [ "${0::4}" == "/usr" ]
 then
   libfy=/usr/lib/froyo
@@ -38,6 +39,9 @@ flag_descriptions=(
   "Ignore errors & produce broken script"
 )
 
+# supported value types
+TYPES=(string character integer float boolean pointer array)
+
 # colours!
 none=$'\e[0m'
 bold=$'\e[1m'
@@ -46,8 +50,6 @@ red=$'\e[1;31m'
 
 fatal()
 {
-  add_err=
-  
   # the default exit code is 1 but can be changed if desired
   ret=1
   if [ ${#1} -eq 1 ] && [ -z "${1//[0-9]}" ]
@@ -73,10 +75,13 @@ fatal()
 
   if flag "noerror"
   then
+    # to avoid repeating error data
+    add_err=
     return
   fi
 
-  if [ ! "$out" == "/dev/stdout" ] && [ -z "$dontrm" ]
+  # `dontrm` is specified in the overwrite error
+  if [ ! "$out" == /dev/stdout ] && [ -z "$dontrm" ]
   then
     rm -f "$out"
   fi
@@ -97,7 +102,14 @@ warn()
 
 out()
 {
-  echo "$tab""$@" >>"$out"
+  # shorten tab to first 2
+  if [ "$1" == "-n" ]
+  then
+    shift
+    echo "${tab:2}""$@" >>"$out"
+  else
+    echo "$tab""$@" >>"$out"
+  fi
 }
 
 flag()
@@ -273,6 +285,10 @@ then
 fi
 
 src="$(<$infile)"
+# preserve backslaches in source
+src="${src//'\'/'\\'}"
+# turn semicolons to newlines
+src="${src//';'/$'\n'}"
 
 # PARSE
 
@@ -301,34 +317,37 @@ do
   else
     case "$tl" in
       # shebang
-      "#!"*)               type[$cur]="head";;
+      "#!"*)                type[$cur]="head";;
       # single line comment
-      "//"*)               type[$cur]="sl_comment";;
+      "//"*)                type[$cur]="sl_comment";;
       # multi line comment
-      "/*"*)               type[$cur]="ml_comment";;
-      # declaring a value with attributes
-      *": "*" = "*)        type[$cur]="value_attr";;
-      # declaring a value
-      *" = "*)             type[$cur]="value";;
+      "/*"*)                type[$cur]="ml_comment";;
       # a function
-      "function "*|"fn "*) type[$cur]="function";;
+      "function "*|"fn "*)  type[$cur]="function";;
+      # suffixed-if
+      [a-z]*"("*")"*" if"*) type[$cur]="suffixif";;
       # an if statement
-      "if "*)              type[$cur]="if";;
+      "if "*)               type[$cur]="if";;
       # block containing code
-      "{")                 type[$cur]="codeblock";;
+      "{")                  type[$cur]="codeblock";;
       # add if to an else statement
-      *"else if"*)         type[$cur]="elseif";;
+      *"else if"*)          type[$cur]="elseif";;
       # else to if statement
-      *"else"*)            type[$cur]="else";;
-      "}")                 type[$cur]="endblock";;
+      *"else"*)             type[$cur]="else";;
+      # end codeblock
+      "}")                  type[$cur]="endblock";;
       # include external
-      "include "*)         type[$cur]="include";;
+      "include "*)          type[$cur]="include";;
+      # declaring a value with attributes
+      *": "*" = "*)         type[$cur]="value_attr";;
+      # declaring a value
+      *" = "*)              type[$cur]="value";;
       # code that will be ran
-      [a-z]*"("*")")       type[$cur]="run";;
+      [a-z]*"("*")")        type[$cur]="run";;
       # ignore the line because it is empty
-      "")                  type[$cur]="head";;
+      "")                   type[$cur]="head";;
       # all else fails
-      *) fatal             "failed to determine type of code";;
+      *)  fatal              "failed to determine type of code";;
     esac
   fi
 
@@ -446,6 +465,14 @@ _is_array()
   val_content="(${val_content[@]})"
 }
 
+_run_digest()
+{
+  run_name="${current%%'('*}"
+  run_content="${current#"$run_name"}"
+   run_content="${run_content#'('}"
+   run_content="${run_content%')'}"
+}
+
 for lt in ${type[@]}
 do
   cur+=1
@@ -532,12 +559,29 @@ do
       fi
       ;;
     "endblock")
-      tab="${tab:2}" out "}"
+      out -n "}"
       if [ -n "$in_if_statement" ] && [ $in_if_statement -eq 1 ]
       then
         in_if_statement=0
         out "fi"
       fi
+      ;;
+    "suffixif")
+      current="${current#*" if "}" _if_statement
+      current="${current%" if"*}" _run_digest
+
+      case "$if_type" in
+        "eval")
+          out -n "if [[ $if_content ]]"
+          ;;
+        "run")
+          out -n "if { $if_content; }"
+          ;;
+      esac
+      out -n "then {"
+      out "$run_name $run_content"
+      out -n "}"
+      out -n "fi"
       ;;
     "if")
       current="${current#*"if "}"
@@ -545,39 +589,39 @@ do
 
       case "$if_type" in
         "eval")
-          tab="${tab:2}" out "if [[ $if_content ]]"
+          out -n "if [[ $if_content ]]"
           ;;
         "run")
-          tab="${tab:2}" out "if { $if_content ;}"
+          out -n "if { $if_content ;}"
           ;;
       esac
-      tab="${tab:2}" out "then {"
+      out -n "then {"
       ;;
     "elseif")
       current="${current#*"else if "}"
       _if_statement
 
-      tab="${tab:2}" out "}"
+      out -n "}"
       case "$if_type" in
         "eval")
-          tab="${tab:2}" out "elif [[ $if_content ]]"
+          out -n "elif [[ $if_content ]]"
           ;;
         "run")
-          tab="${tab:2}" out "elif { $if_content ;}"
+          out -n "elif { $if_content ;}"
           ;;
       esac
-      tab="${tab:2}" out "then {"
+      out -n "then {"
       ;;
     "else")
-      tab="${tab:2}" out "}"
-      tab="${tab:2}" out "else {"
+      out -n "}"
+      out -n "else {"
       in_if_statement=1
       ;;
     "value")
       val_name="${current% *= *}"
       val_content="${current#* = }"
 
-      for type in string character integer float boolean pointer array
+      for type in ${TYPES[@]}
       do
         if _is_"$type"
         then
@@ -587,7 +631,7 @@ do
           continue
         fi
       done
-
+      
       if [ -z "$val_type" ]
       then
         fatal "$val_name is of type character, which can only have a length of 1 character" \
@@ -609,42 +653,50 @@ do
         case "$attr" in
           "string"|"str") val_type="string";;
           "character"|"char") val_type="character";;
-          "integer"|"int") val_type="integer";;
+          "integer"|"int") val_type="integer" prefix+=(-i);;
           "float") val_type="float";;
           "boolean"|"bool") val_type="boolean";;
-          "array") val_type="array";;
-          "readonly"|"ro") val_ro=1;;
+          "array") val_type="array" prefix+=(-a);;
+          "readonly"|"ro") val_ro=1 prefix+=(-r);;
           "local") val_local=1;;
           *) fatal "unknown attribute <'$attr'> provided for value <'$val_name'>";;
         esac
       done
 
-      if ! _is_"$val_type"
+      if [ -n "$val_type" ] && ! _is_"$val_type"
       then
         fatal "incorrect type <$val_type> specified for <$val_name>"
+      elif [ ${#val_type} -eq 0 ]
+      then
+        for type in ${TYPES[@]}
+        do
+          if _is_"$type"
+          then
+            val_type="$type"
+            break
+          fi
+        done
+      fi
+      
+      if [ -z "$val_type" ]
+      then
+        fatal "$val_name is of type character, which can only have a length of 1 character" \
+              $'\n'"are you looking for a string instead?"
       fi
 
       if [ -n "$val_local" ] && [ $val_local -eq 1 ]
       then
-        prefix+=(-I)
-      fi
-
-      if [ -n "$val_ro" ] && [ $val_ro -eq 1 ]
-      then
-        prefix+=(-r)
+        out "local" "$val_name"
       fi
 
       out "declare" "${prefix[@]}" "$val_name=$val_content"
       ;;
     "run")
-      run_name="${current%%'('*}"
-      run_content="${current#"$run_name"}"
-        run_content="${run_content#'('}"
-        run_content="${run_content%')'}"
+      _run_digest
 
       if ! { ffunction "$run_name" || internal "$run_name" ;}
       then
-        fatal "there is no shell builtin to satisfy or external script to satisfy <$run_name>"
+        fatal "there is no shell builtin or external script to satisfy <$run_name>"
       fi
 
       out "$run_name" "$run_content"

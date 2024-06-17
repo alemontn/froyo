@@ -18,8 +18,7 @@ if (($print_hello == true))
 {
   // return greeting
   hello()
-} \
-else
+} else
 {
   echo("no greeting for you")
 }

@@ -6,4 +6,4 @@ fatal: src/wrong.fy(9): incorrect type <float> specified for <thisFloat>
 fatal: src/wrong.fy(10): incorrect type <boolean> specified for <thisBoolean>
 fatal: src/wrong.fy(11): incorrect type <character> specified for <thisCharacter>
 fatal: src/wrong.fy(12): incorrect type <array> specified for <thisArray>
-fatal: src/wrong.fy(19): there is no shell builtin to satisfy or external script to satisfy <fn>
+fatal: src/wrong.fy(19): there is no shell builtin or external script to satisfy <fn>

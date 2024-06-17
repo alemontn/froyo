@@ -1,8 +1,8 @@
 #!/usr/bin/env bash
-# /usr/bin/froyo src/drink.fy -odrink -ywerror -ynoticeFroyo -ycomments
+# /usr/bin/froyo src/drink.fy -odrink.sh -ywerror -ynoticeFroyo -ycomments
 # Drinking age calculator
 # Written in Froyo for testing its compiler
-# module included @ /lib/froyo/ext/ask.sh
+# module included @ /usr/lib/froyo/ext/ask.sh
 ask()
 {
   prompt=$1
