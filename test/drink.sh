@@ -25,5 +25,4 @@ then {
 else {
   # boo hoo
   echo "you're not old enough to drink legally yet"
-}
-  fi
+  } fi

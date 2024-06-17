@@ -12,5 +12,18 @@ max: int = 9
 // loop through each number
 foreach(i, $(literal "{$min..$max}"))
 {
-  echo($i)
+  echo(i "=" $i)
 }
+
+a: int = 4
+b: int = 8
+
+while(($a != $b))
+{
+  // increment a by 1
+  a ++
+}
+
+// print final values
+echo(a "=" $a)
+echo(b "=" $b)

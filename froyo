@@ -334,6 +334,8 @@ do
       *"else"*)             type[$cur]="else";;
       # for each in <...>
       "foreach("*", "*")")  type[$cur]="foreach";;
+      # while loop
+      "while("*")")         type[$cur]="while";;
       # end codeblock
       "}")                  type[$cur]="endblock";;
       # include external
@@ -588,6 +590,7 @@ do
         fi
         argh+=1
       done
+      in_function=1
       ;;
     "codeblock")
       if [ ! "${current::1}" == "{" ]
@@ -596,16 +599,20 @@ do
       fi
       ;;
     "endblock")
-      out -n "}"
       if [ -n "$in_if_statement" ] && [ $in_if_statement -eq 1 ]
       then
         in_if_statement=0
-        out "fi"
+        out "} fi"
       fi
       if [ -n "$in_loop" ] && [ $in_loop -eq 1 ]
       then
         in_loop=0
-        out "done"
+        out -n "} done"
+      fi
+      if [ -n "$in_function" ] && [ $in_function -eq 1 ] && [ $cur -eq ${#line[@]} ]
+      then
+        in_function=0
+        out -n "}"
       fi
       ;;
     "suffixif")
@@ -658,6 +665,25 @@ do
       out -n "}"
       out -n "else {"
       in_if_statement=1
+      ;;
+    "while")
+      condition="${current#"while("}"
+       condition="${condition%')'}"
+
+      case "${condition::1}"
+      in
+        '(')
+          condition="${condition#'('}"
+           condition="${condition%')'}"
+          out -n "while [[ $condition ]]"
+          ;;
+        *)
+          out -n "while { $condition ;}"
+          ;;
+      esac
+      out -n "do {"
+      in_loop=1
+      tab+="  "
       ;;
     "foreach")
       val_name="${current#"foreach("}"

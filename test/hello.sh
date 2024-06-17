@@ -10,7 +10,6 @@ hello()
   declare -r greeting="Hello world"
   # print greeting to screen
   echo $greeting
-}
 if [[ $print_hello == true ]]
 then {
   # return greeting
@@ -18,5 +17,5 @@ then {
 }
 else {
   echo "no greeting for you"
+  } fi
 }
-  fi

@@ -1,7 +1,5 @@
 #!/usr/bin/env bash
-# /usr/bin/froyo src/wrong.fy -owrong.sh -ywerror -ynoerror -ynoticeFroyo -ycomments
-# This file is purposely wrong to test if Froyo
-# can spot its errors or not
+# /usr/bin/froyo src/wrong.fy -owrong.sh -ywerror -ynoerror -ynoticeFroyo -ycomment
 declare -i -r thisInteger=notaninteger
 declare -r thisFloat=x.y.z
 declare -r thisBoolean=itstrue
@@ -12,4 +10,3 @@ echo ($thisFloat)
 echo $thisBoolean
 
 fn myFunction) firstArg
-}
