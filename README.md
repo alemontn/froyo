@@ -9,18 +9,18 @@ WILL NOT WORK PROPERLY.
 
 ## What?
 
-Froyo is a language/"subset" that compiles down to bash
+Froyo is a "language" that compiles down to bash
 
 ## Compilation
 
 Froyo's compilation is more of a conversion than compiling
 since Froyo's symbols are just turned into bash's
 
-To compile a Froyo file do:
+To compile Froyo source do:
 
   `froyo -o<OUT> src/myscript.fy`
 
-To compile a Froyo file with 'werror' (warnings treated as errors):
+To compile with 'werror' (warnings treated as errors):
 
   `froyo -o<OUT> -ywerror src/myscript.fy`
 
@@ -32,7 +32,7 @@ Here are some examples of Froyo's syntax
 
 ```
 hello: str, readonly = "Hello world"
-echo($hello)
+echo("$hello")
 ```
 
 ### If statement
@@ -63,4 +63,18 @@ if (($b > $a))
 a: int, ro = 5
 b: int, ro = 11
 echo($a "is less than" $b) if (($a < $b))
+```
+
+### For loop
+
+```
+include literal
+
+min: int = 0
+max: int = 9
+
+foreach(i, $(literal {$min..$max}))
+{
+  echo($i)
+}
 ```
