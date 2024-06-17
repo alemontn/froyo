@@ -338,6 +338,8 @@ do
       "}")                  type[$cur]="endblock";;
       # include external
       "include "*)          type[$cur]="include";;
+      # run from environment
+      "env("*")")           type[$cur]="env";;
       # declaring a value with attributes
       *": "*" = "*)         type[$cur]="value_attr";;
       # declaring a value
@@ -467,6 +469,18 @@ _is_array()
   val_content="(${val_content[@]})"
 }
 
+_is_command()
+{
+  [ "${val_content::1}" == "(" ] && [ "${val_content: -1}" == ")" ] || return 1
+
+  val_content="${val_content#'('}"
+   val_content="${val_content%')'}"
+
+  current="$val_content" _run_digest
+
+  val_content='$('"$run_name $run_content"')'
+}
+
 _run_digest()
 {
   run_name="${current%%'('*}"
@@ -540,6 +554,14 @@ do
       else
         fatal "missing external module <'$include'> from $libfy/ext"
       fi
+      ;;
+    "env")
+      current="${current#"env("}"
+       current="${current%")"}"
+
+      _run_digest
+
+      out "$run_name" "$run_content"
       ;;
     "function")
       current="${current#*' '}"
@@ -689,6 +711,8 @@ do
           "integer"|"int") val_type="integer" prefix+=(-i);;
           "float") val_type="float";;
           "boolean"|"bool") val_type="boolean";;
+          "command"|"cmd") val_type="command";;
+          "pointer") val_type="pointer";;
           "array") val_type="array" prefix+=(-a);;
           "readonly"|"ro") val_ro=1 prefix+=(-r);;
           "local") val_local=1;;
