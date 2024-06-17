@@ -7,7 +7,7 @@ include ask
 
 echo("* drinking age calculator *")
 // Prompt user
-ask("how old are you? " age)
+ask("how old are you?" age)
 
 // Legal age in the UK is 18 but varies from country 2 country
 if (($age >= 18))
