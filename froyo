@@ -46,6 +46,8 @@ red=$'\e[1;31m'
 
 fatal()
 {
+  add_err=
+  
   # the default exit code is 1 but can be changed if desired
   ret=1
   if [ ${#1} -eq 1 ] && [ -z "${1//[0-9]}" ]

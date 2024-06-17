@@ -6,6 +6,6 @@
 // define array
 myArray: array, ro = ['firstItem', 'secondItem', 'thirdItem']
 
-echo("first =" "$[0]myArray")
-echo("third =" "$[2]myArray")
-echo("all =" "$[@]myArray")
+echo("first =" "${myArray[0]}")
+echo("third =" "${myArray[2]}")
+echo("all =" "${myArray[@]}")
