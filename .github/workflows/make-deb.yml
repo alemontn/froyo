@@ -15,6 +15,8 @@ jobs:
           path: /home/runner/work/froyo/froyo
 
       - name: Make debian package
+        env:
+          GH_WORKFLOW: 1
         run: |
           cd /home/runner/work/froyo/froyo/pkg
           ./make-deb.sh

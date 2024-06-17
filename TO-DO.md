@@ -6,12 +6,8 @@
   append a comment to the end of code or have more than code
   on one line and must instead use a newline to
 
-* `\` is taken by bash during compilation meaning if you want
-  to use things like colours (`$'\e[1;31m'` is red) it will be
-  corrupted
-
 * Cannot use custom variable notation (e.g. should be `$@array`
-  instead of `${array[@]}` because of how compilation is
+  instead of `${array[@]}`) because of how compilation is
   currently done
 
 * There's probably lots more that haven't be discovered yet
