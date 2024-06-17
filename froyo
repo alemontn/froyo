@@ -287,8 +287,6 @@ fi
 src="$(<$infile)"
 # preserve backslaches in source
 src="${src//'\'/'\\'}"
-# turn semicolons to newlines
-src="${src//';'/$'\n'}"
 
 # PARSE
 
@@ -347,7 +345,7 @@ do
       # ignore the line because it is empty
       "")                   type[$cur]="head";;
       # all else fails
-      *)  fatal              "failed to determine type of code";;
+      *) fatal              "failed to determine type of code";;
     esac
   fi
 
@@ -631,7 +629,7 @@ do
           continue
         fi
       done
-      
+
       if [ -z "$val_type" ]
       then
         fatal "$val_name is of type character, which can only have a length of 1 character" \
@@ -677,7 +675,7 @@ do
           fi
         done
       fi
-      
+
       if [ -z "$val_type" ]
       then
         fatal "$val_name is of type character, which can only have a length of 1 character" \
