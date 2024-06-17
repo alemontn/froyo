@@ -21,15 +21,21 @@
 # exit on errors
 set -e
 
-libfy=/lib/froyo
+if [ "${0::4}" == "/usr" ]
+then
+  libfy=/usr/lib/froyo
+else
+  libfy=/lib/froyo
+fi
 
 # declare flags & what they do
-flags=("werror" "comments" "noticeFroyo" "module")
+flags=("werror" "comments" "noticeFroyo" "module" "noerror")
 flag_descriptions=(
   "Treat warnings as errors"
   "Keep comments in compiled file"
   "Add comment explaining that the script was compiled from Froyo"
   "Compile for an external module (don't include shebang + use werror flag)"
+  "Ignore errors & produce broken script"
 )
 
 # colours!
@@ -61,7 +67,12 @@ fatal()
     add_err+=":"
   fi
 
-  echo $red"fatal:"$none "$add_err" "$@"
+  echo $red"fatal:"$none "$add_err" "$@" >&2
+
+  if flag "noerror"
+  then
+    return
+  fi
 
   if [ ! "$out" == "/dev/stdout" ] && [ -z "$dontrm" ]
   then
@@ -74,7 +85,7 @@ fatal()
 
 warn()
 {
-  echo $yellow"warning:"$none "$@"
+  echo $yellow"warning:"$none "$@" >&2
 
   if flag "werror"
   then
@@ -168,6 +179,21 @@ then
   set -- "--help"
 fi
 
+_get_arg_val()
+{
+  argn="$1"
+  arg="$2"
+  next="$3"
+
+  if [ "${arg::2}" == "-${argn::1}" ] && [ -n "${arg::3}" ]
+  then
+    echo -n "${arg:2}"
+  elif [ ! ${#next} -eq 0 ]
+  then
+    echo -n "$arg"
+  fi
+}
+
 sys_args=($@)
 while [ ! $# -eq 0 ]
 do
@@ -179,14 +205,7 @@ do
       version
       ;;
     "--output"|"-o"*)
-      if [ "${1::2}" == "-o" ] && [ -n "${1::3}" ]
-      then
-        out="${1:2}"
-      elif [ ! ${#2} -eq 0 ]
-      then
-        shift
-        out="$1"
-      fi
+      out=$(_get_arg_val "output" "$1" "$2")
 
       # - represents stdout
       if [ "$out" == "-" ]
@@ -198,24 +217,10 @@ do
       infile=/dev/stdin
       ;;
     "--eflag"|"-y"*)
-      if [ "${1::2}" == "-y" ] && [ -n "${1::3}" ]
-      then
-        eflags+=("${1:2}")
-      elif [ ! ${#2} -eq 0 ]
-      then
-        shift
-        eflags+=("$1")
-      fi
+      eflags+=("$(_get_arg_val "y" "$1" "$2")")
       ;;
     "--dflag"|"-n"*)
-      if [ "${1::2}" == "-n" ] && [ -n "${1::3}" ]
-      then
-        eflags=("${eflags[@]/"${1:2}"}")
-      elif [ ! ${#2} -eq 0 ]
-      then
-        shift
-        eflags=("${eflags[@]/"$1"}")
-      fi
+      eflags=(${eflags[@]/"$(_get_arg_val "n" "$1" "$2")"})
       ;;
     "--list-flags"|"-l")
       list_flags
@@ -324,6 +329,7 @@ do
       *) fatal             "failed to determine type of code";;
     esac
   fi
+
   line[$cur]="$tl"
 done \
  <<<"$src"
@@ -520,7 +526,6 @@ do
     "codeblock")
       if [ ! "${current::1}" == "{" ]
       then
-        echo current="$current" >&2
         out "$current"
       fi
       ;;

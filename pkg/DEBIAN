@@ -1,0 +1,10 @@
+Package: froyo
+License: GPL-v3.0
+Version: 0.0.1
+Section: utils
+Priority: optional
+Architecture: all
+Maintainer: alemontn <118671833+alemontn@users.noreply.gitlab.com>
+Description: Compile Froyo source code to a bash script
+Depends: bash
+Recommends: man

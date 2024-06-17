@@ -1,0 +1,27 @@
+name: make-deb
+
+on:
+  push:
+  workflow_dispatch:
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v3
+        with:
+          repository: alemontn/froyo
+          path: /home/runner/work/froyo/froyo
+
+      - name: Make debian package
+        run: |
+          cd /home/runner/work/froyo/froyo/pkg
+          ./make-deb.sh
+          mv deb/build.deb ~/froyo.deb
+
+      - name: Upload artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: out
+          path: /home/runner/froyo.deb
