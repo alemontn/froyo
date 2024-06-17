@@ -24,4 +24,4 @@ done
 
 cat <"$repo"/pkg/DEBIAN >DEBIAN/control
 
-dpkg-deb --root-owner-group --build "$PWD" &>deb.log
+dpkg-deb --root-owner-group --build "$PWD"
