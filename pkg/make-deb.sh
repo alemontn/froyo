@@ -12,9 +12,14 @@ mkdir -p \
 
 install -m755 "$repo"/froyo usr/bin/froyo
 
-for ext in "$repo"/ext/*.sh
+sudo mkdir -p /usr/lib/froyo
+sudo install -m755 "$repo"/froyo /usr/bin/froyo
+
+for ext in "$repo"/ext/src/*.fy
 do
-  install -m755 "$ext" usr/lib/froyo/ext/"${ext##*'/'}"
+  out="${ext##*'/'}" out="${out%'.fy'}".sh
+
+  froyo -o"usr/lib/froyo/ext/$out" -ymodule "$ext"
 done
 
 cat <"$repo"/pkg/DEBIAN >DEBIAN/control
