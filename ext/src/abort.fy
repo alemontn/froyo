@@ -2,7 +2,7 @@ none = $'\e[0m'
 red = $'\e[1;31m'
 yellow = $'\e[1;33m'
 
-fn abort(ret, message)
+fn abort(ret, "message")
 {
   // print provided message
   echo($red"error:"$none "$message")
@@ -10,7 +10,7 @@ fn abort(ret, message)
   return($ret)
 }
 
-fn warn(message)
+fn warn("message")
 {
   echo($yellow"warning:"$none "$message")
 }

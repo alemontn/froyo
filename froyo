@@ -40,7 +40,7 @@ flag_descriptions=(
 )
 
 # supported value types
-TYPES=(string character integer float boolean pointer array)
+TYPES=(string integer character float boolean pointer array)
 
 # colours!
 none=$'\e[0m'
@@ -102,14 +102,7 @@ warn()
 
 out()
 {
-  # shorten tab to first 2
-  if [ "$1" == "-n" ]
-  then
-    shift
-    echo "${tab:2}""$@" >>"$out"
-  else
-    echo "$tab""$@" >>"$out"
-  fi
+  echo "$@" >>"$out"
 }
 
 flag()
@@ -337,7 +330,7 @@ do
       # while loop
       "while("*")")         type[$cur]="while";;
       # end codeblock
-      "}")                  type[$cur]="endblock";;
+      "}"|"} "*\\)          type[$cur]="endblock";;
       # include external
       "include "*)          type[$cur]="include";;
       # run from environment
@@ -354,6 +347,9 @@ do
       "")                   type[$cur]="head";;
       # all else fails
       *) fatal              "failed to determine type of code";;
+    esac
+    case "$tl" in
+      *" "\\)               ext[$cur]="nextline"
     esac
   fi
 
@@ -421,7 +417,6 @@ _if_statement()
   if_content="${if_content%%' '}"
 
   in_if_statement=1
-  tab="  "
 }
 
 _is_string()
@@ -497,6 +492,7 @@ declare -a functions
 for lt in ${type[@]}
 do
   cur+=1
+  next=$((cur+1))
 
   fn_args=()
   prefix=()
@@ -507,6 +503,16 @@ do
   if_type=
   if_name=
   if_content=
+
+  et="${ext[$cur]}"
+
+  case "$et" in
+    "nextline")
+      lt+=" ${line[$next]}"
+      line[$next]=
+      type[$next]="head"
+      ;;
+  esac
 
   case "$lt" in
     # do nothing since line is empty
@@ -544,15 +550,43 @@ do
     "include")
       include="${current#"include "}"
 
+      for s in $include
+      do
+        if [[ "$s" == "-"[a-z] ]] || [[ "$s" == "--"[a-z]* ]]
+        then
+          include_args+=("$s")
+          include="${include/"$s "}"
+        fi
+      done
+
+      local_inc=0
+      for arg in ${include_args[@]}
+      do
+        if [ "$arg" == "-l" ] || [ "$arg" == "--local" ]
+        then
+          local_inc=1
+        fi
+      done
+
       if [ -f "$libfy"/ext/"$include".sh ]
       then
-        out "# module included @ $libfy/ext/$include.sh"
-        out "$(<"$libfy"/ext/"$include".sh)"
+        if [ $local_inc -eq 1 ]
+        then
+          out ". $libfy/ext/$include".sh
+        else
+          out "# module included @ $libfy/ext/$include.sh"
+          out "$(<"$libfy"/ext/"$include".sh)"
+        fi
         functions+=("$include")
       elif [ -f "$include" ]
       then
-        out "# file included @ $include"
-        out "$(<$include)"
+        if [ $local_inc -eq 1 ]
+        then
+          out '$(<'"$include"')'
+        else
+          out "# file included @ $include"
+          out "$(<$include)"
+        fi
       else
         fatal "missing external module <'$include'> from $libfy/ext"
       fi
@@ -576,7 +610,6 @@ do
       functions+=("$fn_name")
       out "$fn_name()"
       out "{"
-      tab="  "
 
       declare -i argh=1
       for fn_arg in ${fn_args[@]}
@@ -584,9 +617,10 @@ do
         if [ ${fn_arg::1} == '"' ]
         then
           fn_arg="$(eval echo $fn_arg)"
-          out "$fn_arg="'"''$'"$argh"'"'
+          out "$fn_arg="'"''$@''"'
+          break
         else
-          out "$fn_arg="'$'"$argh"
+          out "$fn_arg="'$'"$argh; shift"
         fi
         argh+=1
       done
@@ -607,12 +641,12 @@ do
       if [ -n "$in_loop" ] && [ $in_loop -eq 1 ]
       then
         in_loop=0
-        out -n "} done"
+        out "} done"
       fi
-      if [ -n "$in_function" ] && [ $in_function -eq 1 ] && [ $cur -eq ${#line[@]} ]
+      if [ -n "$in_function" ] && [ $in_function -eq 1 ]
       then
         in_function=0
-        out -n "}"
+        out "}"
       fi
       ;;
     "suffixif")
@@ -621,16 +655,16 @@ do
 
       case "$if_type" in
         "eval")
-          out -n "if [[ $if_content ]]"
+          out "if [[ $if_content ]]"
           ;;
         "run")
-          out -n "if { $if_content; }"
+          out "if { $if_content; }"
           ;;
       esac
-      out -n "then {"
+      out "then {"
       out "$run_name $run_content"
-      out -n "}"
-      out -n "fi"
+      out "}"
+      out "fi"
       ;;
     "if")
       current="${current#*"if "}"
@@ -638,32 +672,32 @@ do
 
       case "$if_type" in
         "eval")
-          out -n "if [[ $if_content ]]"
+          out "if [[ $if_content ]]"
           ;;
         "run")
-          out -n "if { $if_content ;}"
+          out "if { $if_content ;}"
           ;;
       esac
-      out -n "then {"
+      out "then {"
       ;;
     "elseif")
       current="${current#*"else if "}"
       _if_statement
 
-      out -n "}"
+      out "}"
       case "$if_type" in
         "eval")
-          out -n "elif [[ $if_content ]]"
+          out "elif [[ $if_content ]]"
           ;;
         "run")
-          out -n "elif { $if_content ;}"
+          out "elif { $if_content ;}"
           ;;
       esac
-      out -n "then {"
+      out "then {"
       ;;
     "else")
-      out -n "}"
-      out -n "else {"
+      out "}"
+      out "else {"
       in_if_statement=1
       ;;
     "while")
@@ -675,15 +709,14 @@ do
         '(')
           condition="${condition#'('}"
            condition="${condition%')'}"
-          out -n "while [[ $condition ]]"
+          out "while [[ $condition ]]"
           ;;
         *)
-          out -n "while { $condition ;}"
+          out "while { $condition ;}"
           ;;
       esac
-      out -n "do {"
+      out "do {"
       in_loop=1
-      tab+="  "
       ;;
     "foreach")
       val_name="${current#"foreach("}"
@@ -695,7 +728,6 @@ do
       out "for $val_name in $val_loop"
       out "do {"
       in_loop=1
-      tab+="  "
       ;;
     "value")
       val_name="${current% *= *}"

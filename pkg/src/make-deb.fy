@@ -28,7 +28,7 @@ if ((${#GH_WORKFLOW} != 0 && $GH_WORKFLOW = 1))
 foreach(ext, "$repo"/ext/src/*.fy)
 {
   out: pointer = ${ext##*'/'}
-  out = ${out%'.fy'}
+  out = ${out%'.fy'}".sh"
   env(froyo -o"usr/lib/froyo/ext/$out" -ymodule "$ext")
 }
 

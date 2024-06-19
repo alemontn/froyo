@@ -1,13 +1,11 @@
-fn empty(target)
+fn empty("target")
 {
-  if ((${#target} = 0))
+  ret: int = 0
+
+  if ((${#target} != 0))
   {
-    ret: int = 0
-  } else
-  {
-    ret: int = 1
+    ret = 1
   }
 
   return($ret)
 }
-

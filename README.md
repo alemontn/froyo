@@ -11,6 +11,13 @@ WILL NOT WORK PROPERLY.
 
 Froyo is a "language" that compiles down to bash
 
+## Compatibility
+
+Officially, only Linux is supported but, in theory, any
+Unix* system with bash installed should be compatible.
+
+\* Cygwin (bash for Windows) being an exception
+
 ## Compilation
 
 Froyo's compilation is more of a conversion than compiling

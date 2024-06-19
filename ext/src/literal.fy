@@ -1,4 +1,4 @@
 fn literal("obj")
 {
-  eval(echo $obj)
+  eval(echo "$obj")
 }

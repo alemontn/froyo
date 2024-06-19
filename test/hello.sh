@@ -5,17 +5,17 @@
 declare -r print_hello=true
 hello()
 {
-  # define greeting
-  local greeting
-  declare -r greeting="Hello world"
-  # print greeting to screen
-  echo $greeting
+# define greeting
+local greeting
+declare -r greeting="Hello world"
+# print greeting to screen
+echo $greeting
 if [[ $print_hello == true ]]
 then {
-  # return greeting
-  hello 
+# return greeting
+hello 
 }
 else {
-  echo "no greeting for you"
-  } fi
+echo "no greeting for you"
+} fi
 }
