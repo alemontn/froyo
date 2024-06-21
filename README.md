@@ -38,9 +38,14 @@ Here are some examples of Froyo's syntax
 ### Variables
 
 ```
-hello: str, readonly = "Hello world"
+hello: str, ro = "Hello world"
 echo("$hello")
 ```
+
+`str` (short-hand for `string`) and `ro` (short-hand for `readonly`)
+are attributes applied to the value `hello`
+
+Adding the `readonly` attribute makes the value a constant
 
 ### If statement
 
@@ -64,6 +69,10 @@ if (($b > $a))
 }
 ```
 
+The `(())` condition (`eval` condition) is used for comparison
+while the `()` condition (`run` condition) is used for executing
+code
+
 ### Suffixed if statement
 
 ```
@@ -71,6 +80,12 @@ a: int, ro = 5
 b: int, ro = 11
 echo($a "is less than" $b) if (($a < $b))
 ```
+
+Here, the `if` statement works exactly the same, instead just
+being appended to the the end
+
+(Note: currently only code can be used in a suffixed if
+statement, defining a value is not (yet) implemented)
 
 ### For loop
 
@@ -85,3 +100,6 @@ foreach(i, $(literal {$min..$max}))
   echo($i)
 }
 ```
+
+The `{x..y}` expression is from bash, representing counting `x`
+until `y`

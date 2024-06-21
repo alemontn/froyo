@@ -1,28 +1,39 @@
-#!/usr/bin/env bash
-# /usr/bin/froyo src/loop.fy -oloop.sh -ywerror -ynoticeFroyo -ycomments
+# /usr/bin/froyo src/loop.fy -oloop.sh -nnoComments -ywerror -ynoticeFroyo -ycomments
 # For loop in Froyo
 # For testing the compiler
+
+declare -i min
+declare -i max
+declare -i a
+declare -i b
+
 # module included @ /usr/lib/froyo/ext/literal.sh
 literal()
 {
-obj="$1"
+obj="$@"
 eval echo "$obj"
 }
+
 # range from min to max
-declare -i min=0
-declare -i max=9
+min=0
+max=9
+
 # loop through each number
 for i in $(literal "{$min..$max}")
 do {
 echo i "=" $i
 } done
-declare -i a=4
-declare -i b=8
-while [[ $a != $b ]]
+
+a=4
+b=8
+
+while [[ $a -ne $b ]]
 do {
 # increment a by 1
 a+=1
+echo a "+" 1
 } done
+
 # print final values
 echo a "=" $a
 echo b "=" $b

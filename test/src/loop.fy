@@ -3,11 +3,16 @@
  * For testing the compiler
  */
 
+min: int
+max: int
+a: int
+b: int
+
 include literal
 
 // range from min to max
-min: int = 0
-max: int = 9
+min = 0
+max = 9
 
 // loop through each number
 foreach(i, $(literal "{$min..$max}"))
@@ -15,13 +20,14 @@ foreach(i, $(literal "{$min..$max}"))
   echo(i "=" $i)
 }
 
-a: int = 4
-b: int = 8
+a = 4
+b = 8
 
 while(($a != $b))
 {
   // increment a by 1
   a ++
+  echo(a "+" 1)
 }
 
 // print final values

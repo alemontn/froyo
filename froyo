@@ -30,14 +30,18 @@ else
 fi
 
 # declare flags & what they do
-flags=("werror" "comments" "noticeFroyo" "module" "noerror")
+flags=("werror" "comments" "noComments" "noticeFroyo" "module" "noerror")
 flag_descriptions=(
   "Treat warnings as errors"
-  "Keep comments in compiled file"
+  "Keep comments from source in compiled file"
+  "Don't add comments from source or compiler"
   "Add comment explaining that the script was compiled from Froyo"
   "Compile for an external module (don't include shebang + use werror flag)"
   "Ignore errors & produce broken script"
 )
+# flags set by default
+def_flags=("noComments")
+eflags=(${def_flags[@]})
 
 # supported value types
 TYPES=(string integer character float boolean pointer array)
@@ -102,44 +106,71 @@ warn()
 
 out()
 {
-  echo "$@" >>"$out"
+  in="$@"
+  if ! { flag "noComments" && [ "${in::1}" == "#" ] && [ ! "${in::2}" == "#!" ]; }
+  then
+    echo "$in" >>"$out"
+  fi
 }
 
 flag()
 {
-  # loop through enabled flags
-  for flag in ${eflags[@]}
-  do
-    if [ "$flag" == "$1" ]
-    then
-      return
-    else
-      continue
-    fi
-  done
-  return 1
+  case "$1" in
+    "add")
+      shift
+      eflags+=("$1")
+      ;;
+    "rm")
+      shift
+      eflags=(${eflags//"$1"})
+      ;;
+    "ls")
+      shift
+      if [[ " ${eflags[@]} " == *" $1 "* ]]
+      then
+        return
+      fi
+      return 1
+      ;;
+    *)
+      # loop through enabled flags
+      for flag in ${eflags[@]}
+      do
+        if [ "$flag" == "$1" ]
+        then
+          return
+        else
+          continue
+        fi
+      done
+      return 1
+      ;;
+  esac
 }
 
 flag_conflict()
 {
-  fatal "flag <'$1'> is conflicting with <'$2'> and cannot be used together"
+  warn "flag <'$1'> is conflicting with <'$2'>, disabling <'$2'>"
+  flag rm "$2"
 }
 
 ffunction()
 {
-  if [[ ! " ${functions[@]} " == *" $1 "* ]]
+  if [[ " ${functions[@]} " == *" $1 "* ]]
   then
-    return 1
+    return
   fi
+  return 1
 }
 
 internal()
 {
   builtins=($(compgen -b))
-  if [[ ! " ${builtins[@]} " == *" $1 "* ]]
+  if [[ " ${builtins[@]} " == *" $1 "* ]]
   then
-    return 1
+    return
   fi
+  return 1
 }
 
 usage()
@@ -172,19 +203,34 @@ version()
 
 list_flags()
 {
+  _space()
+  {
+    m=12
+    declare -i c=${#flag}
+
+    until [ $c -eq $m ]
+    do
+      echo -n " "
+      c+=1
+    done
+  }
+
   declare -i loop=0
   for flag in ${flags[@]}
   do
-    echo "$flag => ${flag_descriptions[$loop]}"
+    _def_set="-"
+    if [[ " ${def_flags[@]} " == *" $flag "* ]] && flag ls "$flag"
+    then
+      _def_set="*"
+    elif flag ls "$flag"
+    then
+      _def_set="+"
+    fi
+    echo "$_def_set $flag$(_space) ${flag_descriptions[$loop]}"
     loop+=1
   done &&
     exit 0
 }
-
-if [ $# -eq 0 ]
-then
-  set -- "--help"
-fi
 
 _get_arg_val()
 {
@@ -202,6 +248,12 @@ _get_arg_val()
 }
 
 sys_args=($@)
+
+if [ $# -eq 0 ]
+then
+  set -- "--help"
+fi
+
 while [ ! $# -eq 0 ]
 do
   case "$1" in
@@ -224,10 +276,10 @@ do
       infile=/dev/stdin
       ;;
     "--eflag"|"-y"*)
-      eflags+=("$(_get_arg_val "y" "$1" "$2")")
+      flag add "$(_get_arg_val "y" "$1" "$2")"
       ;;
     "--dflag"|"-n"*)
-      eflags=(${eflags[@]/"$(_get_arg_val "n" "$1" "$2")"})
+      flag rm "$(_get_arg_val "n" "$1" "$2")"
       ;;
     "--list-flags"|"-l")
       list_flags
@@ -250,9 +302,19 @@ do
   shift
 done
 
+# FLAG STUFF
+
+for pflag in "comments" "noticeFroyo"
+do
+  if flag "noComments" && flag "$pflag"
+  then
+    flag_conflict "$pflag" "noComments"
+  fi
+done
+
 if flag "module"
 then
-  eflags+=("werror")
+  flag add "werror"
 fi
 
 if [ ${#infile} -eq 0 ]
@@ -277,6 +339,8 @@ then
   out="out"
 fi
 
+# SOURCE PARSING
+
 src="$(<$infile)"
 # preserve backslaches in source
 src="${src//'\'/'\\'}"
@@ -285,80 +349,114 @@ src="${src//'\'/'\\'}"
 
 # set integer for current line
 declare -i cur=0
-# declare integer
+# declare ARRAY
 declare -a type
 
-while read tl
-do
-  # increment current line by 1
-  prev=$cur
-  cur+=1
+_print_line()
+{
+  printf "%s\n" "${line[@]}"
+}
 
-  if [ "${type[$prev]}" == "function" ]
-  then
-    type[$cur]="codeblock"
-  fi
+_eval_typeline()
+{
+  while read tl
+  do
+    # increment current line by 1
+    prev=$cur
+    cur+=1
 
-  if [ "${type[$prev]}" == "ml_comment" ] && [ ! "${tl: -2}" == "*/" ]
-  then
-    type[$cur]="ml_comment"
-  elif [ "${tl: -2}" == "*/" ]
-  then
-    type[$cur]="end_ml_c"
-  else
-    case "$tl" in
-      # shebang
-      "#!"*)                type[$cur]="head";;
-      # single line comment
-      "//"*)                type[$cur]="sl_comment";;
-      # multi line comment
-      "/*"*)                type[$cur]="ml_comment";;
-      # a function
-      "function "*|"fn "*)  type[$cur]="function";;
-      # suffixed-if
-      [a-z]*"("*")"*" if"*) type[$cur]="suffixif";;
-      # an if statement
-      "if "*)               type[$cur]="if";;
-      # block containing code
-      "{")                  type[$cur]="codeblock";;
-      # add if to an else statement
-      *"else if"*)          type[$cur]="elseif";;
-      # else to if statement
-      *"else"*)             type[$cur]="else";;
-      # for each in <...>
-      "foreach("*", "*")")  type[$cur]="foreach";;
-      # while loop
-      "while("*")")         type[$cur]="while";;
-      # end codeblock
-      "}"|"} "*\\)          type[$cur]="endblock";;
-      # include external
-      "include "*)          type[$cur]="include";;
-      # run from environment
-      "env("*")")           type[$cur]="env";;
-      # declaring a value with attributes
-      *": "*" = "*)         type[$cur]="value_attr";;
-      # declaring a value
-      *" = "*)              type[$cur]="value";;
-      # appending to a value
-      *" += "*|*" ++")      type[$cur]="append";;
-      # code that will be ran
-      [a-z]*"("*")")        type[$cur]="run";;
-      # ignore the line because it is empty
-      "")                   type[$cur]="head";;
-      # all else fails
-      *) fatal              "failed to determine type of code";;
-    esac
-    case "$tl" in
-      *" "\\)               ext[$cur]="nextline"
-    esac
-  fi
+    if [ "${type[$prev]}" == "function" ]
+    then
+      type[$cur]="codeblock"
+    fi
 
-  line[$cur]="$tl"
-done \
- <<<"$src"
+    if [ "${type[$prev]}" == "ml_comment" ] && [ ! "${tl: -2}" == "*/" ]
+    then
+      type[$cur]="ml_comment"
+    elif [ "${tl: -2}" == "*/" ]
+    then
+      type[$cur]="end_ml_c"
+    else
+      case "$tl" in
+        # shebang
+        "#!"*)                                       type[$cur]="nospace";;
+        # single line comment
+        "//"*)                                       type[$cur]="sl_comment";;
+        # multi line comment
+        "/*"*)                                       type[$cur]="ml_comment";;
+        # a function
+        "function "*|"fn "*)                         type[$cur]="function";;
+        # suffixed-if
+        [a-z]*"("*")"*" if"*)                        type[$cur]="suffixif";;
+        # an if statement
+        "if "*)                                      type[$cur]="if";;
+        # block containing code
+        "{"|"{"*'\')                                 type[$cur]="codeblock";;
+        # add if to an else statement
+        *"else if"*)                                 type[$cur]="elseif";;
+        # else to if statement
+        *"else"*)                                    type[$cur]="else";;
+        # for each in <...>
+        "foreach("*", "*")"|"foreach("*", "*")"*'\') type[$cur]="foreach";;
+        # while loop
+        "while("*")"|"while("*")"*'\')               type[$cur]="while";;
+        # end codeblock
+        "}"|"}"*'\')                                 type[$cur]="endblock";;
+        # include external
+        "include "*)                                 type[$cur]="include";;
+        # run from environment
+        "env("*")"|"env("*")"*'\')                   type[$cur]="env";;
+        # declaring a value with attributes
+        *": "*" = "*)                                type[$cur]="value_attr";;
+        # declaring a value
+        *": "*)                                      type[$cur]="define";;
+        # define plain value with attributes & infer type
+        *" = "*)                                     type[$cur]="value";;
+        # appending to a value
+        *" += "*|*" ++"|*" ++"*'\')                  type[$cur]="append";;
+        # piped code that will be ran
+        [a-z]*"("*")"*"|"*[a-z]*"("*")"|[a-z]*"("*")"*"|"*[a-z]*"("*")"*'\') type[$cur]="pipe";;
+        # code that will be ran
+        [a-z]*"("*")"|a-z]*"("*")"*'\')              type[$cur]="run";;
+        # ignore the line because it is empty
+        "")                                          type[$cur]="head";;
+        # all else fails
+        *) fatal                                     "failed to determine type of code";;
+      esac
+    fi
 
-# redeclare
-declare -i cur=0
+    line[$cur]="$tl"
+  done \
+   <<<"$@"
+  cur=0
+}
+
+_eval_newline()
+{
+  while read tl
+  do
+    cur+=1
+    next=$((cur+1))
+
+    if [ "${tl: -1}" == '\' ]
+    then
+      tl="${tl%'\'}"
+      line[$cur]="${line[$cur]/*'\'/"$tl ${line[$next]}"}"
+      type[$cur]="${type[$next]}"
+      line[$next]=
+      type[$next]="nospace"
+    fi
+  done \
+   <<<"$@"
+  cur=0
+}
+
+# add shebang
+line[0]="#!/usr/bin/env bash"
+
+_eval_typeline "$src"
+_eval_newline "$(_print_line)"
+_eval_typeline "$(_print_line)"
 
 if [ ! "$infile" == "/dev/stdin" ]
 then
@@ -375,10 +473,6 @@ then
   then
     : >"$out"
   fi
-  if ! flag "module"
-  then
-    out "#!/usr/bin/env bash"
-  fi
 fi
 
 if flag "noticeFroyo"
@@ -388,34 +482,10 @@ fi
 
 _if_statement()
 {
-  if [ "${current::2}" == "((" ]
-  then
-    if_type="eval"
-    if_content="${current#((}"
-     if_content="${if_content%))}"
-  elif [ "${current::1}" == "(" ]
-  then
-    if_type="run"
-    if_content="${current#(}"
-     if_content="${if_content%)}"
-  fi
+  # get eval/run type
+  _type_parse
 
-  # pad if conditions
-  if_content=" $if_content "
-
-  # replace user symbols to `test` arguments
-  if_content="${if_content//' < '/' -lt '}"
-  if_content="${if_content//' > '/' -gt '}"
-  if_content="${if_content//' <= '/' -le '}"
-  if_content="${if_content//' >= '/' -ge '}"
-  # use '==' for string comparisons
-  if_content="${if_content//' = '/' -eq '}"
-  if_content="${if_content//' != '/' -ne '}"
-
-  # "de"-pad if condition
-  if_content="${if_content##' '}"
-  if_content="${if_content%%' '}"
-
+  # set if statement
   in_if_statement=1
 }
 
@@ -478,12 +548,73 @@ _is_command()
   val_content='$('"$run_name $run_content"')'
 }
 
+_type_parse()
+{
+  if [ "${current::2}" == "((" ]
+  then
+    if_type="eval"
+
+    content="${current##'(('}"
+     content="${content%%'))'}"
+
+    # pad if conditions
+    content=" $content "
+
+    # replace user symbols to `test` arguments
+    content="${content//' < '/' -lt '}"
+    content="${content//' > '/' -gt '}"
+    content="${content//' <= '/' -le '}"
+    content="${content//' >= '/' -ge '}"
+    # use '==' for string comparisons
+    content="${content//' = '/' -eq '}"
+    content="${content//' != '/' -ne '}"
+
+    # "de"-pad if condition
+    content="${content##' '}"
+    content="${content%%' '}"
+  elif [ "${current::1}" == "(" ]
+  then
+    if_type="run"
+    _run_digest
+  else
+    fatal "failed to determine type of code, supported are ['run', 'eval']"
+  fi
+}
+
 _run_digest()
 {
   run_name="${current%%'('*}"
   run_content="${current#"$run_name"}"
+   run_content="${run_content//$'\n'}"
+   run_content="${run_content##' '}"
+   run_content="${run_content%%' '}"
    run_content="${run_content#'('}"
    run_content="${run_content%')'}"
+
+  if ! { ffunction "$run_name" || internal "$run_name" ;}
+  then
+    fatal "there is no shell builtin or external script to satisfy <$run_name>"
+  fi
+}
+
+_attr_digest()
+{
+  for attr in ${val_attrs[@]}
+  do
+    case "$attr" in
+      "string"|"str") val_type="string";;
+      "character"|"char") val_type="character";;
+      "integer"|"int") val_type="integer" prefix+=(-i);;
+      "float") val_type="float";;
+      "boolean"|"bool") val_type="boolean";;
+      "command"|"cmd") val_type="command";;
+      "pointer") val_type="pointer";;
+      "array") val_type="array" prefix+=(-a);;
+      "readonly"|"ro") val_ro=1 prefix+=(-r);;
+      "local") val_local=1;;
+      *) fatal "unknown attribute <'$attr'> provided for value <'$val_name'>";;
+    esac
+  done
 }
 
 declare -A values
@@ -492,31 +623,28 @@ declare -a functions
 for lt in ${type[@]}
 do
   cur+=1
-  next=$((cur+1))
+  lt="${type[$cur]}"
+  current="${line[$cur]}"
 
   fn_args=()
   prefix=()
-  current="${line[$cur]}"
-
   val_name=
   val_type=
   if_type=
   if_name=
-  if_content=
+  content=
 
-  et="${ext[$cur]}"
-
-  case "$et" in
-    "nextline")
-      lt+=" ${line[$next]}"
-      line[$next]=
-      type[$next]="head"
-      ;;
-  esac
+  if [ ${#lt} -eq 0 ]
+  then
+    break
+  fi
 
   case "$lt" in
-    # do nothing since line is empty
     "head")
+      out
+      ;;
+    # do nothing since line is empty
+    "nospace")
       :
       ;;
     "sl_comment")
@@ -637,13 +765,11 @@ do
       then
         in_if_statement=0
         out "} fi"
-      fi
-      if [ -n "$in_loop" ] && [ $in_loop -eq 1 ]
+      elif [ -n "$in_loop" ] && [ $in_loop -eq 1 ]
       then
         in_loop=0
         out "} done"
-      fi
-      if [ -n "$in_function" ] && [ $in_function -eq 1 ]
+      elif [ -n "$in_function" ] && [ $in_function -eq 1 ]
       then
         in_function=0
         out "}"
@@ -651,16 +777,17 @@ do
       ;;
     "suffixif")
       current="${current#*" if "}" _if_statement
-      current="${current%" if"*}" _run_digest
 
       case "$if_type" in
         "eval")
-          out "if [[ $if_content ]]"
+          out "if [[ $content ]]"
           ;;
         "run")
-          out "if { $if_content; }"
+          out "if { $run_name $run_content ;}"
           ;;
       esac
+
+      current="${current%" if"*}" _run_digest
       out "then {"
       out "$run_name $run_content"
       out "}"
@@ -672,25 +799,26 @@ do
 
       case "$if_type" in
         "eval")
-          out "if [[ $if_content ]]"
+          out "if [[ $content ]]"
           ;;
         "run")
-          out "if { $if_content ;}"
+          out "if { $run_name $run_content ;}"
           ;;
       esac
       out "then {"
       ;;
     "elseif")
       current="${current#*"else if "}"
+
       _if_statement
 
       out "}"
       case "$if_type" in
         "eval")
-          out "elif [[ $if_content ]]"
+          out "elif [[ $content ]]"
           ;;
         "run")
-          out "elif { $if_content ;}"
+          out "elif { $run_name $run_content ;}"
           ;;
       esac
       out "then {"
@@ -701,18 +829,16 @@ do
       in_if_statement=1
       ;;
     "while")
-      condition="${current#"while("}"
-       condition="${condition%')'}"
+      current="${current#"while"}"
+      condition="${current}"
+      _type_parse
 
-      case "${condition::1}"
-      in
-        '(')
-          condition="${condition#'('}"
-           condition="${condition%')'}"
-          out "while [[ $condition ]]"
+      case "$if_type" in
+        "eval")
+          out "while [[ $content ]]"
           ;;
-        *)
-          out "while { $condition ;}"
+        "run")
+          out "while { $run_name $run_content ;}"
           ;;
       esac
       out "do {"
@@ -728,6 +854,25 @@ do
       out "for $val_name in $val_loop"
       out "do {"
       in_loop=1
+      ;;
+    "define")
+      val_name="${current%: *}"
+      val_attrs="${current#*: }"
+       val_attrs=(${val_attrs//', '/' '})
+
+      _attr_digest
+
+      if [ -n "$val_ro" ] && [ $val_ro -eq 1 ]
+      then
+        case "$val_type" in
+          "boolean"|"command"|"pointer"|"array")
+            fatal "type <'$val_type'> cannot be empty and readonly"
+            ;;
+        esac
+        warn "setting empty readonly variable"
+      fi
+
+      out "declare" "${prefix[@]}" "$val_name"
       ;;
     "value")
       val_name="${current% *= *}"
@@ -746,8 +891,7 @@ do
 
       if [ -z "$val_type" ]
       then
-        fatal "$val_name is of type character, which can only have a length of 1 character" \
-              $'\n'"are you looking for a string instead?"
+        fatal "failed to determine type of value <'$val_name'>"
       fi
 
       values["$val_type"]+="$val_name "
@@ -761,22 +905,7 @@ do
         val_attrs=("${val_attrs//','}")
       val_content="${current#"$val_name: ""${val_attrs[@]//' '/', '}" *= }"
 
-      for attr in ${val_attrs[@]}
-      do
-        case "$attr" in
-          "string"|"str") val_type="string";;
-          "character"|"char") val_type="character";;
-          "integer"|"int") val_type="integer" prefix+=(-i);;
-          "float") val_type="float";;
-          "boolean"|"bool") val_type="boolean";;
-          "command"|"cmd") val_type="command";;
-          "pointer") val_type="pointer";;
-          "array") val_type="array" prefix+=(-a);;
-          "readonly"|"ro") val_ro=1 prefix+=(-r);;
-          "local") val_local=1;;
-          *) fatal "unknown attribute <'$attr'> provided for value <'$val_name'>";;
-        esac
-      done
+      _attr_digest
 
       if [ -n "$val_type" ] && ! _is_"$val_type"
       then
@@ -827,12 +956,11 @@ do
     "run")
       _run_digest
 
-      if ! { ffunction "$run_name" || internal "$run_name" ;}
-      then
-        fatal "there is no shell builtin or external script to satisfy <$run_name>"
-      fi
-
       out "$run_name" "$run_content"
+      ;;
+    "pipe")
+      out "$(current="${current%'|'*}" _run_digest; echo -n "$run_name" "$run_content")"' | ' \
+          "$(current="${current#*'|'}" _run_digest; echo "$run_name" "$run_content")"
       ;;
   esac
 done

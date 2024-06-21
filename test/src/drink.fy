@@ -13,10 +13,12 @@ ask("how old are you?" age)
 if (($age >= 18))
 {
   echo("you can legally drink!")
-} else if (($age >= 16))
+} \
+else if (($age >= 16))
 {
   echo("you're almost old enough to legally drink")
-} else
+} \
+else
 {
   // boo hoo
   echo("you're not old enough to drink legally yet")
