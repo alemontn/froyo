@@ -30,7 +30,7 @@ else
 fi
 
 # declare flags & what they do
-flags=("werror" "comments" "noComments" "noticeFroyo" "module" "noerror")
+flags=("werror" "comments" "noComments" "noticeFroyo" "module" "noerror" "allowExternal")
 flag_descriptions=(
   "Treat warnings as errors"
   "Keep comments from source in compiled file"
@@ -38,6 +38,7 @@ flag_descriptions=(
   "Add comment explaining that the script was compiled from Froyo"
   "Compile for an external module (don't include shebang + use werror flag)"
   "Ignore errors & produce broken script"
+  "Don't error out when command isn't a builtin or module"
 )
 # flags set by default
 def_flags=("noComments")
@@ -205,7 +206,7 @@ list_flags()
 {
   _space()
   {
-    m=12
+    m=14
     declare -i c=${#flag}
 
     until [ $c -eq $m ]
@@ -226,7 +227,7 @@ list_flags()
     then
       _def_set="+"
     fi
-    echo "$_def_set $flag$(_space) ${flag_descriptions[$loop]}"
+    echo "[$_def_set] $flag$(_space) ${flag_descriptions[$loop]}"
     loop+=1
   done &&
     exit 0
@@ -404,8 +405,6 @@ _eval_typeline()
         "}"|"}"*'\')                                 type[$cur]="endblock";;
         # include external
         "include "*)                                 type[$cur]="include";;
-        # run from environment
-        "env("*")"|"env("*")"*'\')                   type[$cur]="env";;
         # declaring a value with attributes
         *": "*" = "*)                                type[$cur]="value_attr";;
         # declaring a value
@@ -591,9 +590,9 @@ _run_digest()
    run_content="${run_content#'('}"
    run_content="${run_content%')'}"
 
-  if ! { ffunction "$run_name" || internal "$run_name" ;}
+  if ! flag "allowExternal" && ! { ffunction "$run_name" || internal "$run_name" ;}
   then
-    fatal "there is no shell builtin or external script to satisfy <$run_name>"
+    fatal "there is no shell builtin or external script to satisfy <'$run_name'>"
   fi
 }
 
@@ -719,14 +718,6 @@ do
         fatal "missing external module <'$include'> from $libfy/ext"
       fi
       ;;
-    "env")
-      current="${current#"env("}"
-       current="${current%")"}"
-
-      _run_digest
-
-      out "$run_name" "$run_content"
-      ;;
     "function")
       current="${current#*' '}"
       fn_name="${current%'('*}"
@@ -742,11 +733,15 @@ do
       declare -i argh=1
       for fn_arg in ${fn_args[@]}
       do
-        if [ ${fn_arg::1} == '"' ]
+        if [ ${fn_arg::1} == '"' ] && [ $argh -eq ${#fn_args[@]} ]
         then
           fn_arg="$(eval echo $fn_arg)"
           out "$fn_arg="'"''$@''"'
           break
+        elif [ ${fn_arg::1} == '"' ]
+        then
+          fn_arg="$(eval echo $fn_arg)"
+          out "$fn_arg="'$'"$argh; shift"
         else
           out "$fn_arg="'$'"$argh; shift"
         fi
