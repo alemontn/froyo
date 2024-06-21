@@ -1,4 +1,4 @@
-fn ask(prompt, ret)
+fn ask("prompt", ret)
 {
   echo(-n "$prompt ")
   read($ret)
