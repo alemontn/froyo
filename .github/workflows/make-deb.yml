@@ -2,6 +2,13 @@ name: make-deb
 
 on:
   push:
+    paths:
+      - 'froyo'
+      - 'input_files/src/**'
+      - 'ext/src/**'
+      - 'pkg/src/make-deb.fy'
+      - 'pkg/DEBIAN'
+      - '.github/workflows/make-deb.yml'
   workflow_dispatch:
 
 jobs:
