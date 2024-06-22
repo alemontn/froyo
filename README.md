@@ -103,3 +103,28 @@ foreach(i, $(literal {$min..$max}))
 
 The `{x..y}` expression is from bash, representing counting `x`
 until `y`
+
+### Switch statement
+
+```
+include ask
+
+answer: int
+ask("5+5 = ?" answer)
+
+switch($answer)
+{
+  case(10)
+  {
+    echo("correct")
+  }
+  case(9)
+  {
+    echo("close")
+  }
+  case()
+  {
+    echo("incorrect")
+  }
+}
+```
