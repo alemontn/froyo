@@ -1,15 +1,15 @@
 # TO DO
 
-### The to-do list is sorted from most priority to least
+The to-do list is sorted from most priority to least
 
-### Some factors that may determine priority include:
+Some factors that may determine priority include:
 
-### - A bug being easier to fix / a feature being easier
-###   to implement
+  - A bug being easier to fix / a feature being easier
+   to implement
 
-### - A bug causing break-age of a very basic feature
+  - A bug causing break-age of a very basic feature
 
-### - A basic feature not yet being implemented
+  - A basic feature not yet being implemented
 
 ## Features
 
