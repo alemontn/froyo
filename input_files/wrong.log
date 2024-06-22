@@ -8,4 +8,4 @@ fatal: src/wrong.fy(10): incorrect type <float> specified for <thisFloat>
 fatal: src/wrong.fy(11): incorrect type <boolean> specified for <thisBoolean>
 fatal: src/wrong.fy(12): incorrect type <character> specified for <thisCharacter>
 fatal: src/wrong.fy(13): incorrect type <array> specified for <thisArray>
-fatal: src/wrong.fy(22): there is no shell builtin or external script to satisfy <echo =>
+fatal: src/wrong.fy(22): there is no shell builtin or external script to satisfy <'echo ='>

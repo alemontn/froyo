@@ -1,4 +1,5 @@
 # /usr/bin/froyo src/loop.fy -oloop.sh -nnoComments -ywerror -ynoticeFroyo -ycomments
+#!/usr/bin/env bash
 # For loop in Froyo
 # For testing the compiler
 

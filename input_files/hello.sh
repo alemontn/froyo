@@ -1,4 +1,5 @@
 # /usr/bin/froyo src/hello.fy -ohello.sh -nnoComments -ywerror -ynoticeFroyo -ycomments
+#!/usr/bin/env bash
 # Print grinting to user
 # For testing compilation of Froyo source code
 
@@ -18,7 +19,9 @@ if [[ $print_hello == true ]]
 then {
 # return greeting
 hello 
+} fi
 }
 else {
+
 echo "no greeting for you"
 } fi

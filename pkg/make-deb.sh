@@ -1,4 +1,5 @@
 # /usr/bin/froyo src/make-deb.fy -omake-deb.sh -nnoComments -ynoticeFroyo -ywerror -yallowExternal
+#!/usr/bin/env bash
 set -e
 
 set -x

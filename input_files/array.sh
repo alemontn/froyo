@@ -1,4 +1,5 @@
 # /usr/bin/froyo src/array.fy -oarray.sh -nnoComments -ywerror -ynoticeFroyo -ycomments
+#!/usr/bin/env bash
 # Arrays in Froyo
 # For testing the compiler can properly handle arrays
 

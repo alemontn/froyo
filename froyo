@@ -66,17 +66,18 @@ fatal()
 
   if [ -n "$infile" ] && [ ! "$infile" == /dev/stdin ]
   then
-    add_err+="$infile"
+    add_err+=" $infile"
   fi
 
   if [ ! ${#cur} -eq 0 ]
   then
     add_err+="($cur):"
-  else
+  elif [ ! ${#infile} -eq 0 ]
+  then
     add_err+=":"
   fi
 
-  echo $red"fatal:"$none "$add_err" "$@" >&2
+  echo $red"fatal:"$none"$add_err" "$@" >&2
 
   if flag "noerror"
   then
@@ -321,7 +322,7 @@ fi
 if [ ${#infile} -eq 0 ]
 then
   fatal "input file not provided"
-elif [ ! -f "$infile" ]
+elif [ ! "$infile" == /dev/stdin ] && [ ! -f "$infile" ]
 then
   fatal "input file $1 does not exist"
 fi
@@ -331,11 +332,11 @@ then
   warn "output file not provided"
 fi
 
-if [ ${#out} -eq 0 ] && [ ! "$infile" == "/dev/stdin" ]
+if [ ${#out} -eq 0 ] && [ ! "$infile" == /dev/stdin ]
 then
   out="${infile%'.fy'}"
    out="${out##*'/'}"
-elif [ ${#out} -eq 0 ] && [ "$infile" == "/dev/stdin" ]
+elif [ ${#out} -eq 0 ] && [ "$infile" == /dev/stdin ]
 then
   out="out"
 fi
@@ -355,15 +356,15 @@ declare -a type
 
 _print_line()
 {
-  printf "%s\n" "${line[@]}"
+  printf "%s\n" "${line[@]//'\'/'\\'}"
 }
 
 _eval_typeline()
 {
   while read tl
   do
-    # increment current line by 1
     prev=$cur
+    # increment current line by 1
     cur+=1
 
     if [ "${type[$prev]}" == "function" ]
@@ -380,13 +381,15 @@ _eval_typeline()
     else
       case "$tl" in
         # shebang
-        "#!"*)                                       type[$cur]="nospace";;
+        "#!/usr/bin/env bash")                       type[$cur]="out";;
         # single line comment
         "//"*)                                       type[$cur]="sl_comment";;
         # multi line comment
         "/*"*)                                       type[$cur]="ml_comment";;
         # a function
         "function "*|"fn "*)                         type[$cur]="function";;
+        # piped code that will be ran
+        [a-z]*"("*")"*"|"*[a-z]*"("*")"|[a-z]*"("*")"*"|"*[a-z]*"("*")"*'\') type[$cur]="pipe";;
         # suffixed-if
         [a-z]*"("*")"*" if"*)                        type[$cur]="suffixif";;
         # an if statement
@@ -401,22 +404,24 @@ _eval_typeline()
         "foreach("*", "*")"|"foreach("*", "*")"*'\') type[$cur]="foreach";;
         # while loop
         "while("*")"|"while("*")"*'\')               type[$cur]="while";;
+        # switch statement
+        "switch("*")"|"switch("*")"*'\')             type[$cur]="switch";;
+        # match for switch statement
+        "case("*")"|"case("*")"*'\')                 type[$cur]="case";;
         # end codeblock
         "}"|"}"*'\')                                 type[$cur]="endblock";;
         # include external
         "include "*)                                 type[$cur]="include";;
         # declaring a value with attributes
         *": "*" = "*)                                type[$cur]="value_attr";;
-        # declaring a value
-        *": "*)                                      type[$cur]="define";;
         # define plain value with attributes & infer type
         *" = "*)                                     type[$cur]="value";;
         # appending to a value
         *" += "*|*" ++"|*" ++"*'\')                  type[$cur]="append";;
-        # piped code that will be ran
-        [a-z]*"("*")"*"|"*[a-z]*"("*")"|[a-z]*"("*")"*"|"*[a-z]*"("*")"*'\') type[$cur]="pipe";;
         # code that will be ran
         [a-z]*"("*")"|a-z]*"("*")"*'\')              type[$cur]="run";;
+        # declaring a value
+        *": "*)                                      type[$cur]="define";;
         # ignore the line because it is empty
         "")                                          type[$cur]="head";;
         # all else fails
@@ -451,7 +456,11 @@ _eval_newline()
 }
 
 # add shebang
-line[0]="#!/usr/bin/env bash"
+if ! flag "module" && [ ! "$out" == /dev/stdout ]
+then
+  line[0]="#!/usr/bin/env bash"
+  type[0]="out"
+fi
 
 _eval_typeline "$src"
 _eval_newline "$(_print_line)"
@@ -484,8 +493,14 @@ _if_statement()
   # get eval/run type
   _type_parse
 
+  if [ "$lt" == "suffixif" ]
+  then
+    # no need to add to nests
+    return
+  fi
+
   # set if statement
-  in_if_statement=1
+  eval "$lt"_nest+=1
 }
 
 _is_string()
@@ -617,7 +632,26 @@ _attr_digest()
 }
 
 declare -A values
+declare -A end_term
+
+# builtins for endings for statements
+end_term=(
+  ["if"]="fi"
+  ["loop"]="done"
+  ["switch"]="esac"
+  ["case"]=";;"
+  ["fn"]=
+)
+
 declare -a functions
+
+declare -i if_nest=0 \
+           loop_nest=0 \
+           fn_nest=0 \
+           switch_nest=0 \
+           case_nest=0 \
+           else_nest=0 \
+           elseif_nest=0
 
 for lt in ${type[@]}
 do
@@ -639,6 +673,9 @@ do
   fi
 
   case "$lt" in
+    "out")
+      out "$current"
+      ;;
     "head")
       out
       ;;
@@ -724,7 +761,7 @@ do
       fn_args="${current#*'('}"
        fn_args="${fn_args%')'}"
 
-      fn_args=("${fn_args//', '/' '}")
+      fn_args=(${fn_args//', '/' '})
 
       functions+=("$fn_name")
       out "$fn_name()"
@@ -741,13 +778,14 @@ do
         elif [ ${fn_arg::1} == '"' ]
         then
           fn_arg="$(eval echo $fn_arg)"
-          out "$fn_arg="'$'"$argh; shift"
+          out "$fn_arg="\"'$'1\""; shift"
         else
-          out "$fn_arg="'$'"$argh; shift"
+          out "$fn_arg="'$'1"; shift"
         fi
         argh+=1
       done
-      in_function=1
+      fn_nest+=1
+      nest+=("fn")
       ;;
     "codeblock")
       if [ ! "${current::1}" == "{" ]
@@ -756,19 +794,37 @@ do
       fi
       ;;
     "endblock")
-      if [ -n "$in_if_statement" ] && [ $in_if_statement -eq 1 ]
-      then
-        in_if_statement=0
-        out "} fi"
-      elif [ -n "$in_loop" ] && [ $in_loop -eq 1 ]
-      then
-        in_loop=0
-        out "} done"
-      elif [ -n "$in_function" ] && [ $in_function -eq 1 ]
-      then
-        in_function=0
-        out "}"
-      fi
+      _last_nest()
+      {
+        if [ ${#nest} -eq 0 ]
+        then
+          return 1
+        else
+          echo -n "${nest[-1]}"
+        fi
+      }
+      for term in if loop fn
+      do
+        if [ "$(_last_nest)" == "$term" ]
+        then
+          out "} ${end_term["$term"]}"
+          # this was the nicest way I could find to remove the last
+          # occurance in the array, sorry!
+          # (thanks stack overflow)
+          # (https://stackoverflow.com/questions/8247433/remove-the-last-element-from-an-array)
+          unset 'nest[-1]'
+          break
+        fi
+      done
+      for sterm in switch case
+      do
+        if [ "$(_last_nest)" == "$sterm" ]
+        then
+          out "${end_term["$sterm"]}"
+          unset 'nest[-1]'
+          break
+        fi
+      done
       ;;
     "suffixif")
       current="${current#*" if "}" _if_statement
@@ -801,6 +857,7 @@ do
           ;;
       esac
       out "then {"
+      nest+=("if")
       ;;
     "elseif")
       current="${current#*"else if "}"
@@ -821,11 +878,9 @@ do
     "else")
       out "}"
       out "else {"
-      in_if_statement=1
       ;;
     "while")
       current="${current#"while"}"
-      condition="${current}"
       _type_parse
 
       case "$if_type" in
@@ -837,7 +892,36 @@ do
           ;;
       esac
       out "do {"
-      in_loop=1
+      loop_nest+=1
+      nest+=("loop")
+      ;;
+    "switch")
+      current="${current#"switch"}"
+      match="${current#'('}"
+       match="${match%')'}"
+
+      out "case $match in"
+      switch_nest+=1
+      nest+=("switch")
+      ;;
+    "case")
+      current="${current#"case"}"
+      match="${current#'('}"
+       match="${match%')'}"
+
+      if [ ${#match} -eq 0 ]
+      then
+        match='*'
+      fi
+
+      if [ $switch_nest -eq 0 ]
+      then
+        fatal "the builtin <'case'> must only be used in a <'switch'> statement"
+      fi
+
+      out "$match)"
+      case_nest+=1
+      nest+=("case")
       ;;
     "foreach")
       val_name="${current#"foreach("}"
@@ -848,7 +932,8 @@ do
 
       out "for $val_name in $val_loop"
       out "do {"
-      in_loop=1
+      loop_nest+=1
+      nest+=("loop")
       ;;
     "define")
       val_name="${current%: *}"
