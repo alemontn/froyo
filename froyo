@@ -276,6 +276,10 @@ do
       ;;
     "--stdin"|"-c")
       infile=/dev/stdin
+      if [ ! -p $infile ]
+      then
+        warn "provided argument <'stdin'> but not running from a pipe"
+      fi
       ;;
     "--eflag"|"-y"*)
       flag add "$(_get_arg_val "y" "$1" "$2")"
@@ -724,13 +728,34 @@ do
       done
 
       local_inc=0
+      file_path=0
+
       for arg in ${include_args[@]}
       do
         if [ "$arg" == "-l" ] || [ "$arg" == "--local" ]
         then
           local_inc=1
         fi
+        if [ "$arg" == "-f" ] || [ "$arg" == "--file-path" ]
+        then
+          file_path=1
+        fi
       done
+
+      if [ $file_path -eq 1 ] && [ $local_inc -eq 1 ]
+      then
+        fatal "conflicting arguments <'local'> and <'file-path'> provided in include"
+      fi
+
+      if [ $file_path -eq 1 ]
+      then
+        if [ ! -f "$include" ]
+        then
+          warn "file path provided <'$include'> for include statement does not exist"
+        fi
+        out ". $include"
+        continue
+      fi
 
       if [ -f "$libfy"/ext/"$include".sh ]
       then

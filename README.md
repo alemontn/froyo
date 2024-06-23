@@ -20,8 +20,9 @@ Unix* system with bash installed should be compatible.
 
 ## Compilation
 
-Froyo's compilation is more of a conversion than compiling
-since Froyo's symbols are just turned into bash's
+Froyo's "compiling" is more of a conversion than compilation
+since all is done is Froyo's symbols are converted into bash's,
+keywords expanded & modules added
 
 To compile Froyo source do:
 
@@ -30,6 +31,19 @@ To compile Froyo source do:
 To compile with 'werror' (warnings treated as errors):
 
   `froyo -o<OUT> -ywerror src/myscript.fy`
+
+You could also compile from `stdin` & then output to `stdout`
+if you really wanted:
+
+  `froyo -c -o- <SRCFILE`
+
+From a pipe:
+
+  `curl -Lso- https://myverycoolwebsite.org/dl/src/myprogram.fy | froyo -c -o-`
+
+To execute while compiling:
+
+  `froyo -c -o- <SRCFILE | bash -`
 
 ## Syntax
 
