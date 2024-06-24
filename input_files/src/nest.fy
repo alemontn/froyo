@@ -5,15 +5,15 @@
 
 fn level_1("run")
 {
-  fn level_2()
+  subfn level_2()
   {
     echo("this is level 2")
-    fn level_3()
+    subfn level_3()
     {
       echo("this is the third & final level")
     }
   }
-  eval("$run")
+  eval(_"$run")
 }
 
 level_1(level_2)

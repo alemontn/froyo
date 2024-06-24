@@ -1,0 +1,184 @@
+        _
+    ___| |__           ______    ______      _____  __        __  _____
+   / __| |_ \         / _____|  / ____ \    / ___ \ \ \      / / / ___ \
+  / /  | | \ \       / /       / /    \ \  / /   \ \ \ \    / / / /   \ \
+ ( \   | |  \_\     | |       | |      ) )/ /     \ \ \ \  / / / /     \ \
+  \ \__| |__        | |______ |  \____/ // /       \ \ \ \/ / / /       \ \
+   \___| |_ \       | |______||    ____/( (         ) ) \  / ( (         ) )
+  __   | | \ \      | |       | |\ \     \ \       / /  / /   \ \       / /
+  \ \  | |  \ )     | |       | | \ \     \ \     / /  / /     \ \     / /
+   \ \_| |__/ /     | |       | |  \ \     \ \___/ /  / /       \ \___/ /
+    \__| |___/      | |       |_|   \_\     \_____/  /_/         \_____/
+       |_|
+
+WARNING
+=======
+
+THIS LANGUAGE IS A WORK IN PROGRESS, VERY BASIC FEATURES WILL NOT WORK PROPERLY.
+IT IS NOT YET READY FOR STANDARD USE.
+
+What?
+=====
+
+Froyo is a "language" that compiles down to bash
+
+Compatibility
+=============
+
+Officially, only Linux is supported but, in theory, any Unix* system with bash
+installed should be compatible.
+
+* Cygwin "bash for Windows" being an exception
+
+Compilation
+===========
+
+Froyo's "compiling" is more of a conversion than compilation
+since all is done is Froyo's symbols are converted into bash's,
+keywords expanded & modules added
+
+To compile Froyo source:
+
+  % froyo -o<OUT> src/myscript.fy
+
+To compile with 'werror' (warnings treated as errors):
+
+  % froyo -o<OUT> -ywerror src/myscript.fy
+
+To take input from 'stdin' (-c) and output to 'stdout' (-o-):
+
+  % froyo -c -o- <SRCFILE
+
+To compile from a pipe:
+
+  % curl -Lso- https://myverycoolwebsite.org/dl/src/myprogram.fy | froyo -c -o-
+
+To execute while compiling:
+
+  % froyo -c -o- <SRCFILE | bash -
+
+Syntax
+======
+
+Here are various examples of Froyo's syntax & builtin "keywords"
+
+Values (variables & constants)
+------------------------------
+
+% cat src/hello.fy
+hello: str, ro = "Hello world!"
+echo("$hello")
+
+  'str' (short-hand for 'string') and 'ro' (short-hand for 'readonly')
+  are the attributes that are applied to the value 'hello'
+
+  By default, values can change (making them variables), but adding
+  the 'readonly' attribute turns them into constants (cannot be changed)]
+
+% froyo -ywerror -o- src/hello.fy | bash -
+Hello world!
+
+If statement
+------------
+
+% cat src/if.fy
+a: int, ro = 5
+b: int, ro = 11
+c: int, ro = 103
+
+if (($b > $a))
+{
+  echo($b "is greater than" $a)
+} else if (($b = $a))
+{
+  echo($b "is the same as" $a)
+} else if (($c > $b))
+{
+  echo($c "is greater than" $b)
+} else
+{
+  echo("values did not match any if")
+}
+
+  The '(( ... ))' condition (a.k.a. an "eval" condition) is used for
+  comparison, while the '( ... )' condition (a.k.a. a "run" condition)
+  is used for executing code, and checking the return value (0 is true,
+  1<= is false)
+
+% froyo -ywerror -o- src/if.fy | bash -
+11 is greater than 5
+
+Suffixed if statement
+---------------------
+
+% cat src/suffixed-if.fy
+a: int, ro = 5
+b: int, ro = 11
+echo($a "is less than" $b) if (($a < $b))
+
+  Here, the `if` statement works exactly the same, instead just
+  being appended to the the end
+
+  (Note: currently only code can be used in a suffixed if
+  statement, defining a value is not (yet) implemented)
+
+% froyo -ywerror -o- src/suffixed-if.fy | bash -
+5 is less than 11
+
+For loop
+--------
+
+% cat src/for.fy
+include literal
+
+min: int = 0
+max: int = 9
+
+foreach(i, $(literal {$min..$max}))
+{
+  echo($i)
+}
+
+  The 'foreach' loop cycles through each occurance
+
+% froyo -ywerror -o- src/for-loop.fy | bash -
+0
+1
+2
+3
+4
+5
+6
+7
+8
+9
+
+Switch statement
+----------------
+
+% cat src/switch.fy
+include ask
+
+answer: int
+ask("5+5= ?" answer)
+
+switch($answer)
+{
+  case(10)
+  {
+    echo("correct!")
+  }
+  case(11|9)
+  {
+    echo("close!")
+  }
+  case()
+  {
+    echo("incorrect")
+  }
+}
+
+% froyo -ywerror -oswitch src/switch.fy
+% ./switch
+5+5= ? 10
+correct!

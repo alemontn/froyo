@@ -1,10 +1,10 @@
-# /usr/bin/froyo src/make-deb.fy -omake-deb.sh -nnoComments -ynoticeFroyo -ywerror -yallowExternal
+# ../froyo src/make-deb.fy -omake-deb.sh -nnoComments -ynoticeFroyo -ywerror -yallowExternal
 #!/usr/bin/env bash
 set -e
 
 set -x
 
-declare repo=$(realpath -L ..)
+repo: cmd =  realpath(-L ..)
 
 mkdir -p deb/build
 cd deb/build

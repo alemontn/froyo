@@ -32,13 +32,13 @@ fi
 # declare flags & what they do
 flags=("werror" "comments" "noComments" "noticeFroyo" "module" "noerror" "allowExternal")
 flag_descriptions=(
-  "Treat warnings as errors"
-  "Keep comments from source in compiled file"
-  "Don't add comments from source or compiler"
-  "Add comment explaining that the script was compiled from Froyo"
-  "Compile for an external module (don't include shebang + use werror flag)"
-  "Ignore errors & produce broken script"
-  "Don't error out when command isn't a builtin or module"
+  "treat warnings as errors"
+  "keep comments from source in compiled file"
+  "don't add comments from source or compiler"
+  "add comment explaining that the script was compiled from Froyo"
+  "compile for an external module (don't include shebang + use werror flag)"
+  "ignore errors & produce broken script"
+  "don't error out when command isn't a builtin or module"
 )
 # flags set by default
 def_flags=("noComments")
@@ -104,6 +104,11 @@ warn()
   then
     fatal "werror is set, exiting"
   fi
+}
+
+debug()
+{
+  :
 }
 
 out()
@@ -186,6 +191,7 @@ Compile Froyo source code to a bash script
 
 Arguments:
  -h, --help        show this help prompt
+ -v, --verbose     show more information
  -V, --version     show froyo's local version
  -c, --stdin       use stdin for input instead of looking for input file
  -o, --output      specify the output bash file
@@ -205,7 +211,7 @@ version()
 
 list_flags()
 {
-  _space()
+  _seperator()
   {
     m=14
     declare -i c=${#flag}
@@ -215,6 +221,7 @@ list_flags()
       echo -n " "
       c+=1
     done
+    echo -n "="
   }
 
   declare -i loop=0
@@ -228,7 +235,7 @@ list_flags()
     then
       _def_set="+"
     fi
-    echo "[$_def_set] $flag$(_space) ${flag_descriptions[$loop]}"
+    echo "[$_def_set] $flag$(_seperator) ${flag_descriptions[$loop]}"
     loop+=1
   done &&
     exit 0
@@ -261,6 +268,14 @@ do
   case "$1" in
     "--help"|"-h")
       usage
+      ;;
+    "--verbose"|"-v")
+      debug()
+      {
+        _class="$1"; shift
+        _info="$@"
+        echo "($_class)" "$_info" >&2
+      }
       ;;
     "--version"|"-V")
       version
@@ -309,6 +324,11 @@ do
 done
 
 # FLAG STUFF
+
+for eflag in ${eflags[@]}
+do
+  debug "flag" "flag <'$eflag'> is set"
+done
 
 for pflag in "comments" "noticeFroyo"
 do
@@ -392,6 +412,8 @@ _eval_typeline()
         "/*"*)                                       type[$cur]="ml_comment";;
         # a function
         "function "*|"fn "*)                         type[$cur]="function";;
+        # function inside a function
+        "subfunction "*|"subfn "*)                   type[$cur]="subfn";;
         # piped code that will be ran
         [a-z]*"("*")"*"|"*[a-z]*"("*")"|[a-z]*"("*")"*"|"*[a-z]*"("*")"*'\') type[$cur]="pipe";;
         # suffixed-if
@@ -416,14 +438,14 @@ _eval_typeline()
         "}"|"}"*'\')                                 type[$cur]="endblock";;
         # include external
         "include "*)                                 type[$cur]="include";;
+        # code that will be ran
+        [a-z]*"("*")"|a-z]*"("*")"*'\')              type[$cur]="run";;
         # declaring a value with attributes
         *": "*" = "*)                                type[$cur]="value_attr";;
         # define plain value with attributes & infer type
         *" = "*)                                     type[$cur]="value";;
         # appending to a value
         *" += "*|*" ++"|*" ++"*'\')                  type[$cur]="append";;
-        # code that will be ran
-        [a-z]*"("*")"|a-z]*"("*")"*'\')              type[$cur]="run";;
         # declaring a value
         *": "*)                                      type[$cur]="define";;
         # ignore the line because it is empty
@@ -434,8 +456,12 @@ _eval_typeline()
     fi
 
     line[$cur]="$tl"
-  done \
-   <<<"$@"
+
+    if [ $_DEBUG -eq 1 ]
+    then
+      debug "eval_typeline" "line <$cur> is of type ${type[$cur]}"
+    fi
+  done
   cur=0
 }
 
@@ -453,29 +479,30 @@ _eval_newline()
       type[$cur]="${type[$next]}"
       line[$next]=
       type[$next]="nospace"
+      debug "eval_newline" "line <$cur> has a nextline indicator"
     fi
-  done \
-   <<<"$@"
+  done
   cur=0
 }
 
 # add shebang
 if ! flag "module" && [ ! "$out" == /dev/stdout ]
 then
+  debug "fs" "output file will have a shebang"
   line[0]="#!/usr/bin/env bash"
   type[0]="out"
 fi
 
-_eval_typeline "$src"
-_eval_newline "$(_print_line)"
-_eval_typeline "$(_print_line)"
+_DEBUG=0 _eval_typeline <<<"$src"
+_eval_newline <<<"$(_print_line)"
+_DEBUG=1 _eval_typeline <<<"$(_print_line)"
 
-if [ ! "$infile" == "/dev/stdin" ]
+if [ ! "$infile" == /dev/stdin ]
 then
   touch "$infile"
 fi
 
-if [ ! "$out" == "/dev/stdout" ]
+if [ ! "$out" == /dev/stdout ]
 then
   touch "$out"
   if [ -n "$(<$out)" ] && [ ${#overwrite} -eq 0 ]
@@ -609,9 +636,14 @@ _run_digest()
    run_content="${run_content#'('}"
    run_content="${run_content%')'}"
 
-  if ! flag "allowExternal" && ! { ffunction "$run_name" || internal "$run_name" ;}
+  if ! flag "allowExternal" &&
+     ! { ffunction "$run_name" || internal "$run_name" ;} &&
+     ! [[ " ${subfunctions[@]} " == *" $run_name "* ]]
   then
     fatal "there is no shell builtin or external script to satisfy <'$run_name'>"
+  elif [[ " ${subfunctions[@]} " == *" $run_name "* ]]
+  then
+    run_name=_"$run_name"
   fi
 }
 
@@ -628,10 +660,42 @@ _attr_digest()
       "command"|"cmd") val_type="command";;
       "pointer") val_type="pointer";;
       "array") val_type="array" prefix+=(-a);;
-      "readonly"|"ro") val_ro=1 prefix+=(-r);;
-      "local") val_local=1;;
+      "readonly"|"ro") val_ro=1 prefix+=(-r); debug "attr_digest" "<'$val_name'> is a constant";;
+      "local") val_local=1; debug "attr_digest" "<'$val_name'> is a local value";;
       *) fatal "unknown attribute <'$attr'> provided for value <'$val_name'>";;
     esac
+    debug "attr_digest" "<'$val_name'> is of type <'$val_type'>"
+  done
+}
+
+_fn_args()
+{
+  fn_args="${current#*'('}"
+   fn_args="${fn_args%')'}"
+
+  fn_args=(${fn_args//', '/' '})
+
+  declare -i argh=1
+  for fn_arg in ${fn_args[@]}
+  do
+    if [[ " ${local_args[@]} " == *" $fn_arg "* ]]
+    then
+      fatal "value <'$fn_arg'> provided for function <'$fn_name'> is a local value"
+    fi
+
+    if [ ${fn_arg::1} == '"' ] && [ $argh -eq ${#fn_args[@]} ]
+    then
+      fn_arg="$(eval echo $fn_arg)"
+      out "$fn_arg="'"''$@''"'
+      break
+    elif [ ${fn_arg::1} == '"' ]
+    then
+      fn_arg="$(eval echo $fn_arg)"
+      out "$fn_arg="\"'$'1\""; shift"
+    else
+      out "$fn_arg="'$'1"; shift"
+    fi
+    argh+=1
   done
 }
 
@@ -655,7 +719,8 @@ declare -i if_nest=0 \
            switch_nest=0 \
            case_nest=0 \
            else_nest=0 \
-           elseif_nest=0
+           elseif_nest=0 \
+           subfn_nest=0
 
 for lt in ${type[@]}
 do
@@ -783,34 +848,37 @@ do
     "function")
       current="${current#*' '}"
       fn_name="${current%'('*}"
-      fn_args="${current#*'('}"
-       fn_args="${fn_args%')'}"
-
-      fn_args=(${fn_args//', '/' '})
 
       functions+=("$fn_name")
       out "$fn_name()"
       out "{"
 
-      declare -i argh=1
-      for fn_arg in ${fn_args[@]}
-      do
-        if [ ${fn_arg::1} == '"' ] && [ $argh -eq ${#fn_args[@]} ]
-        then
-          fn_arg="$(eval echo $fn_arg)"
-          out "$fn_arg="'"''$@''"'
-          break
-        elif [ ${fn_arg::1} == '"' ]
-        then
-          fn_arg="$(eval echo $fn_arg)"
-          out "$fn_arg="\"'$'1\""; shift"
-        else
-          out "$fn_arg="'$'1"; shift"
-        fi
-        argh+=1
-      done
+      _fn_args
+
+      prev_parent_fn="$parent_fn"
+      parent_fn="$fn_name"
+
       fn_nest+=1
       nest+=("fn")
+      ;;
+    "subfn")
+      current="${current#*' '}"
+      fn_name=_"${current%'('*}"
+
+      if [ ${#parent_fn} -eq 0 ]
+      then
+        fatal "subfunction <'${fn_name#_}'> must have a parent function"
+      fi
+
+      subfunctions+=("${fn_name#_}")
+      out "$fn_name()"
+      out "{"
+
+      _fn_args
+      local_args+=(${fn_args[@]})
+
+      subfn_nest+=1
+      nest+=("subfn")
       ;;
     "codeblock")
       if [ ! "${current::1}" == "{" ]
@@ -821,15 +889,19 @@ do
     "endblock")
       _last_nest()
       {
-        if [ ${#nest} -eq 0 ]
+        if [ ${#nest[@]} -eq 0 ]
         then
           return 1
         else
           echo -n "${nest[-1]}"
         fi
       }
-      for term in if loop fn
+      for term in if loop fn subfn
       do
+        if [ "$term" == "fn" ]
+        then
+          parent_fn="$prev_parent_fn"
+        fi
         if [ "$(_last_nest)" == "$term" ]
         then
           out "} ${end_term["$term"]}"
@@ -1070,7 +1142,14 @@ do
   esac
 done
 
-if [ ! "$out" == "/dev/stdout" ]
+# if no code is given on the last line after defining a main function
+# then add a line to execute `main`
+if [ "${type[-1]}" == "endblock" ] && [ "${functions[-1]}" == "main" ]
+then
+  out "main"
+fi
+
+if [ ! "$out" == /dev/stdout ]
 then
   chmod +x "$out"
 fi
