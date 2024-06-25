@@ -1,5 +1,5 @@
 fn ask("prompt", ret)
 {
-  echo(-n "$prompt ")
+  echo(-n, "$prompt ")
   read($ret)
 }

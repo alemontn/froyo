@@ -1,5 +1,5 @@
-# /usr/bin/froyo src/hello.fy -ohello.sh -nnoComments -ywerror -ynoticeFroyo -ycomments
 #!/usr/bin/env bash
+# /usr/bin/froyo src/hello.fy -ohello.sh -nnoComments -ywerror -ynoticeFroyo -ycomments
 # Print grinting to user
 # For testing compilation of Froyo source code
 
@@ -12,16 +12,15 @@ local greeting
 declare -r greeting="Hello world"
 
 # print greeting to screen
-echo $greeting
+echo "$greeting"
 }
 
 if [[ $print_hello == true ]]
 then {
 # return greeting
-hello 
+hello
 } fi
 }
 else {
 
 echo "no greeting for you"
-} fi

@@ -1,5 +1,5 @@
-# /usr/bin/froyo src/loop.fy -oloop.sh -nnoComments -ywerror -ynoticeFroyo -ycomments
 #!/usr/bin/env bash
+# /usr/bin/froyo src/loop.fy -oloop.sh -nnoComments -ywerror -ynoticeFroyo -ycomments
 # For loop in Froyo
 # For testing the compiler
 
@@ -11,7 +11,7 @@ declare -i b
 # module included @ /usr/lib/froyo/ext/literal.sh
 literal()
 {
-obj="$@"
+obj=("$@")
 eval echo "$obj"
 }
 

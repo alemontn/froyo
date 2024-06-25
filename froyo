@@ -116,7 +116,11 @@ out()
   in="$@"
   if ! { flag "noComments" && [ "${in::1}" == "#" ] && [ ! "${in::2}" == "#!" ]; }
   then
-    echo "$in" >>"$out"
+    while read nl
+    do
+      _eval_notation <<<"$nl" >>"$out"
+    done \
+     <<<"$in"
   fi
 }
 
@@ -405,7 +409,7 @@ _eval_typeline()
     else
       case "$tl" in
         # shebang
-        "#!/usr/bin/env bash")                       type[$cur]="out";;
+        "#!/usr/bin/env bash")                       type[$cur]="nospace";;
         # single line comment
         "//"*)                                       type[$cur]="sl_comment";;
         # multi line comment
@@ -438,10 +442,10 @@ _eval_typeline()
         "}"|"}"*'\')                                 type[$cur]="endblock";;
         # include external
         "include "*)                                 type[$cur]="include";;
-        # code that will be ran
-        [a-z]*"("*")"|a-z]*"("*")"*'\')              type[$cur]="run";;
         # declaring a value with attributes
         *": "*" = "*)                                type[$cur]="value_attr";;
+        # code that will be ran
+        [a-z]*"("*")"|a-z]*"("*")"*'\')              type[$cur]="run";;
         # define plain value with attributes & infer type
         *" = "*)                                     type[$cur]="value";;
         # appending to a value
@@ -485,17 +489,50 @@ _eval_newline()
   cur=0
 }
 
-# add shebang
-if ! flag "module" && [ ! "$out" == /dev/stdout ]
-then
-  debug "fs" "output file will have a shebang"
-  line[0]="#!/usr/bin/env bash"
-  type[0]="out"
-fi
+_eval_notation()
+{
+  _snip()
+  {
+    _sym="${sym##*'$'}" _sym="${_sym%%[!a-zA-Z]}"
+  }
 
-_DEBUG=0 _eval_typeline <<<"$src"
-_eval_newline <<<"$(_print_line)"
-_DEBUG=1 _eval_typeline <<<"$(_print_line)"
+  for sym in $(</dev/stdin)
+  do
+    case "$sym" in
+      *'$@'[a-zA-Z]*)
+        _snip
+        name="${_sym#'@'}"
+        _new_sym='{'"$name"'[@]}'
+        ;;
+      *'$#@'[a-zA-Z]*)
+        _snip
+        name="${_sym#'#@'}"
+        _new_sym='{#'"$name"'[@]}'
+        ;;
+      *'$#['[0-9]*']'[a-zA-Z]*)
+        _snip
+        name="${_sym##*[!a-zA-Z]}"
+        end="${_sym#'#['}" end="${end%%']'*}" end='['"$end"']'
+        _new_sym='{#'"$name$end"'}'
+        ;;
+      *'$['[0-9]*']'[a-zA-Z]*)
+        _snip
+        name="${_sym##*[!a-zA-Z]}"
+        end="${_sym#'['}" end="${end%%']'*}" end='['"$end"']'
+        _new_sym='{'"$name$end"'}'
+        ;;
+    esac
+    if [ ! ${#_new_sym} -eq 0 ]
+    then
+      sym="${sym/"$_sym"/"$_new_sym"}"
+    fi
+    echo -n "$sym "
+  done |
+  {
+    stdin=$(</dev/stdin)
+    echo "${stdin%' '}"
+  }
+}
 
 if [ ! "$infile" == /dev/stdin ]
 then
@@ -513,6 +550,18 @@ then
     : >"$out"
   fi
 fi
+
+# add shebang
+if ! flag "module" && [ ! "$out" == /dev/stdout ]
+then
+  debug "fs" "output file will have a shebang"
+  line[0]="#!/usr/bin/env bash"
+  out "${line[0]}"
+fi
+
+_DEBUG=0 _eval_typeline <<<"$src"
+_eval_newline <<<"$(_print_line)"
+_DEBUG=1 _eval_typeline <<<"$(_print_line)"
 
 if flag "noticeFroyo"
 then
@@ -645,6 +694,18 @@ _run_digest()
   then
     run_name=_"$run_name"
   fi
+
+  if [[ "$run_content" =~ ", " ]]
+  then
+    run_args=(${run_content//', '/' '})
+    run_content=
+    for arg in ${run_args[@]}
+    do
+      run_content+="$arg "
+    done
+    # remove trailing space
+    run_content="${run_content%' '}"
+  fi
 }
 
 _attr_digest()
@@ -686,7 +747,7 @@ _fn_args()
     if [ ${fn_arg::1} == '"' ] && [ $argh -eq ${#fn_args[@]} ]
     then
       fn_arg="$(eval echo $fn_arg)"
-      out "$fn_arg="'"''$@''"'
+      out "$fn_arg="'("$@")'
       break
     elif [ ${fn_arg::1} == '"' ]
     then

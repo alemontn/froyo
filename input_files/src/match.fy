@@ -11,14 +11,14 @@ match_1: str, ro = "this is the first value that will be matched wow"
 match_2: str, ro = "second value!!"
 match_3: str, ro = "and the third one"
 
-echo("available matches:" >&2)
+echo("available matches:", >&2)
 // 1 to 3
 foreach(i, {1..3})
 {
-  echo("*" "$i" "$(literal '$'match_$i)" >&2)
+  echo("* $i", "$(literal '$'match_$i)", >&2)
 }
 
-ask("your value:" input)
+ask("your value:", input)
 
 switch("$input")
 {
@@ -46,7 +46,7 @@ foreach(i, {1..3})
 {
   if (("$(literal '$'match_$i)" == "$input"))
   {
-    echo("matched $i from if")
+    echo("matched", $i, "from if")
     matched = true
   }
 }

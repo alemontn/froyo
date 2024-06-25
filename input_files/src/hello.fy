@@ -11,7 +11,7 @@ fn hello()
   greeting: string, ro, local = "Hello world"
 
   // print greeting to screen
-  echo($greeting)
+  echo("$greeting")
 }
 
 if (($print_hello == true))

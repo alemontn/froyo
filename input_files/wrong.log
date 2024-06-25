@@ -1,11 +1,14 @@
 fatal: src/wrong.fy(17): failed to determine type of code
 fatal: src/wrong.fy(19): failed to determine type of code
-fatal: src/wrong.fy(18): failed to determine type of code
-fatal: src/wrong.fy(20): failed to determine type of code
-fatal: src/wrong.fy(7): missing external module <'non-existent'> from /usr/lib/froyo/ext
-fatal: src/wrong.fy(9): incorrect type <integer> specified for <thisInteger>
-fatal: src/wrong.fy(10): incorrect type <float> specified for <thisFloat>
-fatal: src/wrong.fy(11): incorrect type <boolean> specified for <thisBoolean>
-fatal: src/wrong.fy(12): incorrect type <character> specified for <thisCharacter>
-fatal: src/wrong.fy(13): incorrect type <array> specified for <thisArray>
-fatal: src/wrong.fy(22): there is no shell builtin or external script to satisfy <'echo ='>
+fatal: src/wrong.fy(17): failed to determine type of code
+fatal: src/wrong.fy(19): failed to determine type of code
+fatal: src/wrong.fy(6): missing external module <'non-existent'> from /usr/lib/froyo/ext
+fatal: src/wrong.fy(8): incorrect type <integer> specified for <thisInteger>
+fatal: src/wrong.fy(9): incorrect type <float> specified for <thisFloat>
+fatal: src/wrong.fy(10): incorrect type <boolean> specified for <thisBoolean>
+fatal: src/wrong.fy(11): incorrect type <character> specified for <thisCharacter>
+fatal: src/wrong.fy(12): incorrect type <array> specified for <thisArray>
+/usr/bin/froyo: line 1208: functions: bad array subscript
+teger
+echo ($thisFloat)
+echo $thisBoolean

@@ -1,5 +1,5 @@
-# /usr/bin/froyo src/drink.fy -odrink.sh -nnoComments -ywerror -ynoticeFroyo -ycomments
 #!/usr/bin/env bash
+# /usr/bin/froyo src/drink.fy -odrink.sh -nnoComments -ywerror -ynoticeFroyo -ycomments
 # Drinking age calculator
 # Written in Froyo for testing its compiler
 
@@ -20,16 +20,12 @@ ask "how old are you?" age
 if [[ $age -ge 18 ]]
 then {
 echo "you can legally drink!"
-} fi
 }
 elif [[ $age -ge 16 ]]
 then {
-
 echo "you're almost old enough to legally drink"
-} fi
 }
 else {
-
 # boo hoo
 echo "you're not old enough to drink legally yet"
 } fi

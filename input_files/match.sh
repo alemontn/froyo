@@ -1,12 +1,12 @@
-# /usr/bin/froyo src/match.fy -omatch.sh -nnoComments -ywerror -ynoticeFroyo -ycomments
 #!/usr/bin/env bash
+# /usr/bin/froyo src/match.fy -omatch.sh -nnoComments -ywerror -ynoticeFroyo -ycomments
 # Match a provided value
 # tests the `if` & `switch` statements in Froyo
 
 # module included @ /usr/lib/froyo/ext/literal.sh
 literal()
 {
-obj="$@"
+obj=("$@")
 eval echo "$obj"
 }
 # module included @ /usr/lib/froyo/ext/ask.sh
@@ -27,7 +27,7 @@ echo "available matches:" >&2
 # 1 to 3
 for i in {1..3}
 do {
-echo "*" "$i" "$(literal '$'match_$i)" >&2
+echo "* $i" "$(literal '$'match_$i)" >&2
 } done
 
 ask "your value:" input
@@ -53,7 +53,7 @@ for i in {1..3}
 do {
 if [[ "$(literal '$'match_$i)" == "$input" ]]
 then {
-echo "matched $i from if"
+echo "matched" $i "from if"
 matched=true
 } fi
 } done
