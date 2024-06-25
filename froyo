@@ -1,7 +1,16 @@
 #!/usr/bin/env bash
 
 #
-# Froyo - A language that compiles down to bash
+#   _____
+#  / ____|
+# / |     _____ ____ __     __ ____
+# | |____/ ___|/ __ \\ \   / // __ \
+# | |___|| |  / /  \ \\ \ / // /  \ \
+# | |    | |  \ \__/ / \_  / \ \__/ /
+# |_|    |_|   \____/   / /   \____/
+#                      / /
+#                     /_/
+#
 # Copyright (C) 2024, alemontn
 #
 # This program is free software: you can redistribute it and/or modify
@@ -352,7 +361,7 @@ then
   fatal "input file not provided"
 elif [ ! "$infile" == /dev/stdin ] && [ ! -f "$infile" ]
 then
-  fatal "input file $1 does not exist"
+  fatal "input file <'$1'> does not exist"
 fi
 
 if [ ${#out} -eq 0 ]
@@ -551,12 +560,10 @@ then
   fi
 fi
 
-# add shebang
 if ! flag "module" && [ ! "$out" == /dev/stdout ]
 then
   debug "fs" "output file will have a shebang"
-  line[0]="#!/usr/bin/env bash"
-  out "${line[0]}"
+  out "#!/usr/bin/env bash"
 fi
 
 _DEBUG=0 _eval_typeline <<<"$src"

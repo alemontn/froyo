@@ -6,7 +6,7 @@
 // define array
 myArray: array, ro = ['firstItem', 'secondItem', 'thirdItem']
 
-echo("count first =" $#[0]myArray)
-echo("first =" "$[0]myArray")
-echo("third =" "$[2]myArray")
-echo("all =" "$@myArray")
+echo("count first =", $#[0]myArray)
+echo("first =", "$[0]myArray")
+echo("third =", "$[2]myArray")
+echo("all =", "$@myArray")

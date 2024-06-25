@@ -19,8 +19,8 @@ if [[ $print_hello == true ]]
 then {
 # return greeting
 hello
-} fi
 }
 else {
 
 echo "no greeting for you"
+} fi
